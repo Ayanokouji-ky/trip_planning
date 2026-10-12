@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trip.planner.mapper.PlanRouteMapper">
+
+    <resultMap id="BaseResultMap" type="com.trip.planner.entity.PlanRoute">
+        <id column="id" property="id"/>
+        <result column="plan_id" property="planId"/>
+        <result column="from_node_id" property="fromNodeId"/>
+        <result column="to_node_id" property="toNodeId"/>
+        <result column="transport_mode" property="transportMode"/>
+        <result column="distance" property="distance"/>
+        <result column="duration" property="duration"/>
+        <result column="cost" property="cost"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, plan_id, from_node_id, to_node_id, transport_mode, distance, duration, cost
+    </sql>
+
+    <insert id="insert" parameterType="com.trip.planner.entity.PlanRoute" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO plan_route (plan_id, from_node_id, to_node_id, transport_mode, distance, duration, cost)
+        VALUES (#{planId}, #{fromNodeId}, #{toNodeId}, #{transportMode}, #{distance}, #{duration}, #{cost})
+    </insert>
+
+    <insert id="batchInsert" parameterType="java.util.List">
+        INSERT INTO plan_route (plan_id, from_node_id, to_node_id, transport_mode, distance, duration, cost) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.planId}, #{item.fromNodeId}, #{item.toNodeId}, #{item.transportMode},
+             #{item.distance}, #{item.duration}, #{item.cost})
+        </foreach>
+    </insert>
+
+    <update id="update" parameterType="com.trip.planner.entity.PlanRoute">
+        UPDATE plan_route
+        <set>
+            <if test="transportMode != null">transport_mode = #{transportMode},</if>
+            <if test="distance != null">distance = #{distance},</if>
+            <if test="duration != null">duration = #{duration},</if>
+            <if test="cost != null">cost = #{cost},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteByPlanId">
+        DELETE FROM plan_route WHERE plan_id = #{planId}
+    </delete>
+
+    <select id="selectByPlanId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM plan_route WHERE plan_id = #{planId}
+    </select>
+
+</mapper>

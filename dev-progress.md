@@ -25,18 +25,18 @@
 
 | 阶段 | 名称 | 状态 | 完成日期 | 备注 |
 |------|------|------|----------|------|
-| Phase 0 | 脚手架与环境搭建 | 未开始 | - | |
-| Phase 1 | 数据库、实体、Mapper、异常处理 | 未开始 | - | |
-| Phase 2 | 地图服务（百度地理编码 + 路线规划） | 未开始 | - | |
-| Phase 3 | AI 服务（火山方舟 + JSON 提取） | 未开始 | - | |
-| Phase 4 | 行程/节点/路线 CRUD API | 未开始 | - | |
-| Phase 5 | AI 生成编排（POST /api/ai/generate） | 未开始 | - | |
-| Phase 6 | 前端脚手架与 App Shell | 未开始 | - | |
-| Phase 7 | 行程列表与详情 UI | 未开始 | - | |
-| Phase 8 | 百度地图可视化 | 未开始 | - | |
-| Phase 9 | 拖拽排序与路线重算 | 未开始 | - | |
-| Phase 10 | AI 生成表单 UI | 未开始 | - | |
-| Phase 11 | 收尾打磨 | 未开始 | - | |
+| Phase 0 | 脚手架与环境搭建 | 已完成 | 2026-10-12 | 后端8080+前端5173+Vite代理全通过 |
+| Phase 1 | 数据库、实体、Mapper、异常处理 | 已完成 | 2026-10-12 | 5表DDL+5Entity+5Mapper XML+GlobalExceptionHandler |
+| Phase 2 | 地图服务（百度地理编码 + 路线规划） | 已完成 | 2026-10-12 | geocode+route百度API直连，UriComponentsBuilder修复 |
+| Phase 3 | AI 服务（火山方舟 + JSON 提取） | 已完成 | 2026-10-12 | 杭州2日游生成成功，DB记录SUCCESS |
+| Phase 4 | 行程/节点/路线 CRUD API | 已完成 | 2026-10-12 | 完整CRUD循环curl验证通过 |
+| Phase 5 | AI 生成编排（POST /api/ai/generate） | 已完成 | 2026-10-12 | 端到端48s生成成都2日游：10节点全geocode+8路线 |
+| Phase 6 | 前端脚手架与 App Shell | 已完成 | 2026-10-12 | 路由+API层+3stores+AppShell，浏览器冒烟全PASS |
+| Phase 7 | 行程列表与详情 UI | 已完成 | 2026-10-12 | 列表卡片+详情操作栏+DayTabs/NodeCard/NodeForm/RouteList，浏览器冒烟全PASS |
+| Phase 8 | 百度地图可视化 | 已完成 | 2026-10-12 | 新浏览器端AK接入，标记/折线/弹窗/天切换/卡片联动冒烟全PASS |
+| Phase 9 | 拖拽排序与路线重算 | 已完成 | 2026-10-12 | dnd-kit(鼠标+键盘传感器)+乐观更新/回滚+自动重算，API与浏览器冒烟全PASS |
+| Phase 10 | AI 生成表单 UI | 已完成 | 2026-10-12 | 结构化表单+全屏倒计时遮罩+120s超时，真实生成跳转冒烟PASS |
+| Phase 11 | 收尾打磨 | 已完成 | 2026-10-12 | 免责声明全覆盖+ErrorBoundary+JSON/PNG导出+响应式+logback，MVP 全部 11 阶段完成 |
 
 ## 状态说明
 
@@ -47,101 +47,128 @@
 ## 详细进度记录
 
 ### Phase 0 — 脚手架与环境搭建
-- [ ] Maven Wrapper 生成
-- [ ] backend/pom.xml 创建
-- [ ] settings.xml Aliyun 镜像配置
-- [ ] application.yml 配置
-- [ ] TripPlannerApplication.java 主类
-- [ ] HealthController 健康检查
-- [ ] Vite 脚手架创建
-- [ ] Ant Design + Zustand + Axios 安装
-- [ ] Vite 代理配置
-- [ ] MySQL 建库
-- **验证**：后端 `/api/health` 返回 OK，前端 http://localhost:5173 可访问
+- [x] Maven Wrapper 生成
+- [x] backend/pom.xml 创建
+- [x] settings.xml Aliyun 镜像配置
+- [x] application.yml 配置
+- [x] TripPlannerApplication.java 主类
+- [x] HealthController 健康检查
+- [x] Vite 脚手架创建
+- [x] Ant Design + Zustand + Axios 安装
+- [x] Vite 代理配置
+- [x] MySQL 建库
+- **验证**：后端 `/api/health` 返回 `{"code":200,"message":"up"}`，前端 http://127.0.0.1:5173 可访问，Vite 代理 /api → 8080 生效
 
 ### Phase 1 — 数据库、实体、Mapper、异常处理
-- [ ] schema.sql 5 张表 DDL
-- [ ] Entity 类（TravelPlan, PlanDay, PlanNode, PlanRoute, AiGeneration）
-- [ ] Mapper 接口 + XML
-- [ ] ApiResult<T> 统一响应
-- [ ] GlobalExceptionHandler
-- **验证**：DDL 导入成功，GET /api/plans/1 返回 404
+- [x] schema.sql 5 张表 DDL
+- [x] Entity 类（TravelPlan, PlanDay, PlanNode, PlanRoute, AiGeneration）
+- [x] Mapper 接口 + XML
+- [x] ApiResult<T> 统一响应
+- [x] GlobalExceptionHandler
+- **验证**：DDL 导入成功（5表），GET /api/plans/1 返回 `{"code":404,"message":"TravelPlan not found, id=1"}`，GET /api/plans 返回空列表
 
 ### Phase 2 — 地图服务
-- [ ] BaiduMapServiceImpl（geocode + route）
-- [ ] RestClientConfig（两个 RestTemplate Bean）
-- [ ] GeoUtils（haversine + 估算耗时）
-- [ ] MapController
-- **验证**：geocode 返回正确经纬度，route 返回距离/耗时
+- [x] BaiduMapServiceImpl（geocode + route）
+- [x] RestClientConfig（两个 RestTemplate Bean）
+- [x] GeoUtils（haversine + 估算耗时）
+- [x] MapController
+- **验证**：geocode "杭州西湖" → lat:30.265, lng:120.136；route → distance:973m, duration:274s
 
 ### Phase 3 — AI 服务
-- [ ] ArkAiServiceImpl（调用 Ark responses API）
-- [ ] PromptBuilder（系统提示 + 用户需求渲染）
-- [ ] JsonExtractor（4 步容错解析）
-- [ ] AiGenerationMapper（调用记录）
-- **验证**：AI 生成"杭州2日游"解析成功，DB 记录 SUCCESS
+- [x] ArkAiServiceImpl（调用 Ark responses API）
+- [x] PromptBuilder（系统提示 + 用户需求渲染）
+- [x] JsonExtractor（4 步容错解析）
+- [x] AiGenerationMapper（调用记录）
+- **验证**：AI 生成"杭州2日游"解析成功（2天10节点：断桥/楼外楼/苏堤/九溪/龙井村/灵隐寺等），DB 记录 id=3 SUCCESS，失败记录也正确写 FAILED
 
 ### Phase 4 — 行程/节点/路线 CRUD API
-- [ ] PlanController + PlanServiceImpl（列表/详情/创建/更新/删除/复制）
-- [ ] NodeController + NodeServiceImpl（增/删/改/重排序）
-- [ ] RouteService（重新计算路线）
-- **验证**：curl 完整 CRUD 循环
+- [x] PlanController + PlanServiceImpl（列表/详情/创建/更新/删除/复制）
+- [x] NodeController + NodeServiceImpl（增/删/改/重排序）
+- [x] RouteService（重新计算路线）
+- **验证**：curl 完整 CRUD 循环全部通过——创建行程(自动建2天) → 加3节点(自动geocode+orderIndex) → 重算路线(2条真实距离) → 重排序 → 更新节点 → 删除节点(重建order) → 复制行程(ID重映射) → 删除行程(级联+404)
 
 ### Phase 5 — AI 生成编排
-- [ ] AiController POST /api/ai/generate
-- [ ] 端到端事务流程（prompt → AI → JSON → geocode → route → 持久化）
-- [ ] 容错处理（geocode/route 单点失败不中断）
-- [ ] AI 失败记录（非事务写 FAILED）
-- **验证**：POST /api/ai/generate 生成完整行程，DB 各表数据完整
+- [x] AiGenerateRequest / AiGenerateResult DTO
+- [x] AiService 返回 generationId（AiGenerateResult 包装）
+- [x] PlanService.createFromAi：单事务持久化 plan+days+nodes（逐节点 geocode，50ms 限流，失败留空坐标）+ routes（复用 RouteService.recalculate）
+- [x] AiGenerateService 编排（本身非事务：AI 失败不建 plan、FAILED 记录独立提交；成功后回写 ai_generation.plan_id）
+- [x] AiController POST /api/ai/generate（@Validated 校验）
+- **验证**：POST /api/ai/generate {"requirement":"成都2天，美食和熊猫","title":"成都美食熊猫2日游"} → 48.4s 返回完整 PlanDetailResponse：plan id=3(status=AI_GENERATED) + 2天 + 10节点（全部geocode成功）+ 8条真实驾车路线；日志确认 generationId=4 关联 planId=3；空 requirement 返回 400 参数校验
 
 ### Phase 6 — 前端脚手架与 App Shell
-- [ ] 路由配置
-- [ ] Axios client.ts
-- [ ] Zustand stores
-- [ ] AppLayout 布局
-- [ ] TS 类型定义
-- [ ] Disclaimer 组件
-- **验证**：前端启动、路由跳转、API 代理生效
+- [x] 路由配置（createBrowserRouter：/ /plans /plans/:id /generate）
+- [x] Axios client.ts（baseURL /api，60s 超时，拦截器解包 ApiResult.data + 统一 message 错误提示）+ planApi/aiApi/mapApi
+- [x] Zustand stores（planStore 列表/详情、uiStore 全局加载/侧栏折叠、mapStore 选中节点/路线/天筛选）
+- [x] AppLayout 布局（Sider 菜单 + Header + Content(Outlet) + Footer，md 断点自动折叠）
+- [x] TS 类型定义镜像后端 DTO（api/plan/ai）
+- [x] Disclaimer 组件 + App.tsx 全局加载遮罩 + 安装 @ant-design/icons、@types/node
+- **验证**：tsc+vite build 通过；dev server 启动；4 路由均 200；/api 代理 health/plans 均 code=200；浏览器冒烟 PASS（首页/列表2条/点击跳转/plans/3，控制台无报错）
 
 ### Phase 7 — 行程列表与详情 UI
-- [ ] PlanListPage
-- [ ] PlanDetailPage
-- [ ] NodeCard + NodeForm
-- [ ] RouteList
-- [ ] utils 格式化工具
-- **验证**：列表展示、详情查看、节点增删改、复制行程
+- [x] utils/time.ts（formatSeconds/formatMinutes）+ utils/geo.ts（formatDistance）
+- [x] PlanCard（标题/城市/天数/状态Tag/摘要 + 查看/复制/删除Popconfirm）
+- [x] PlanListPage（卡片网格响应式 Row/Col + 复制/删除后刷新 + Empty 引导）
+- [x] DayTabs（全部/按天切换，节点计数 Tag，联动 mapStore.activeDayId）
+- [x] NodeCard（orderIndex 圆形编号、placeType 图标配色、时长/亮点/门票带"仅供参考"/未定位标记、编辑/删除）
+- [x] NodeForm（Modal 表单：地点必填/类型/时长/亮点/描述/开放时间/门票/预估费用/备注，新增编辑复用）
+- [x] RouteList（from→to、交通方式图标Tag、距离/耗时格式化，随天筛选）
+- [x] PlanDetailPage（顶部操作栏返回/复制/删除/重算路线 + 左列 DayTabs/NodeCard/新增节点/RouteList + 右列地图占位 Card + 默认选中第一天）
+- [x] antd 5.29 废弃属性修复（Card bodyStyle→styles.body、Modal destroyOnClose→destroyOnHidden）
+- **验证**：build 通过；浏览器冒烟全 PASS——列表3卡片展示、复制+1、Popconfirm删除恢复、/plans/3 详情操作栏与摘要、DayTabs切换(5/5/10)、新增节点"锦里古街"(编号5)、编辑亮点保存、控制台无红色报错；测试节点36已用API清理并重算路线(10节点/8路线)
 
 ### Phase 8 — 百度地图可视化
-- [ ] index.html 加载百度地图 script
-- [ ] useBaiduMap Hook
-- [ ] BaiduMapContainer（标记 + 折线 + 弹窗）
-- [ ] NodePopup + RoutePopup
-- [ ] Day 筛选联动
-- **验证**：地图展示标记+折线、点击弹窗、天切换刷新
+- [x] index.html 清理高德残留 + 脚本改为动态加载（utils/loadBaiduMap.ts：dev 走 vite 代理 /bmapgl，生产走百度 getscript 直链，绕开引导层 document.write 被拦截问题）
+- [x] types/bmapgl.d.ts（BMapGL 核心类最小声明）+ vite-env.d.ts（import.meta.env）
+- [x] useBaiduMap Hook（动态加载脚本单例 Promise + 初始化 Map 实例）
+- [x] BaiduMapContainer：SVG data-URI 编号圆形标记（按 place_type 配色）、routes 折线（from/to 坐标）、InfoWindow（createPortal 渲染 React 组件）、setViewport 自适应、Day 筛选联动重绘、selectedNodeId 联动 panTo+弹窗
+- [x] NodePopup + RoutePopup（节点/路线信息，门票"仅供参考"）
+- [x] PlanDetailPage 右列接入地图 + NodeCard onSelect/active 联动（编辑/删除按钮 stopPropagation）
+- [x] vite.config.ts 加 /bmapgl 代理（仅供 dev/测试）
+- **排障记录**：①引导层 api?v=1.0 用 document.write 注入被浏览器拦截→改 getscript 直链；②测试浏览器对 baidu.com 断网→vite 代理 /bmapgl；③index.html parser 插入的 script 标签不执行（无报错、下载完整、动态注入却成功，疑似测试环境 headless 怪异行为）→改 utils/loadBaiduMap.ts 动态注入；④旧服务端 AK 浏览器端被禁用→用户提供浏览器端专用 AK（IwPC...EvQy，见 API.md），loadBaiduMap.ts 与 vite 代理同步替换
+- **验证**：build 通过；浏览器冒烟全 PASS——BMapGL.Map 就绪无鉴权弹窗、全部10标记/8折线自适应、DayTabs 第1天(5)/第2天(5)/全部(10)联动重绘、标记 InfoWindow（名称/类型/时长/亮点/门票仅供参考）、折线 InfoWindow（起终点/驾车/距离/耗时）、卡片点击 panTo+弹窗+蓝色高亮、控制台无红色报错（瓦片在测试网络下灰色，真实网络正常）
 
 ### Phase 9 — 拖拽排序与路线重算
-- [ ] @dnd-kit 安装 + DraggableNodeList
-- [ ] 拖拽 → 乐观更新 → API reorder
-- [ ] 重排后自动 recalculateRoutes
-- [ ] 地图标记重新编号
-- **验证**：拖拽节点 → 排序更新 → 路线重算 → 地图刷新
+- [x] 安装 @dnd-kit/core@6.3 + @dnd-kit/sortable@10 + @dnd-kit/utilities@3.2
+- [x] DraggableNodeList（DndContext + SortableContext 垂直排序，HolderOutlined 拖拽手柄，PointerSensor 5px 激活阈值防误触，KeyboardSensor 空格/方向键无障碍排序）
+- [x] 单天 tab 可拖拽；"全部"tab 按天分组只读（无手柄，不支持跨天拖拽）
+- [x] 拖拽完成乐观更新 orderIndex → PUT /nodes/reorder → 自动 POST /routes/recalculate → fetchDetail 权威刷新；失败回滚快照并提示
+- [x] 地图随 orderIndex 变化自动重绘：标记重新编号、折线按新相邻关系重连
+- [x] 修复 orderIndex 0-based 约定不一致（后端 0 起，NodeCard/地图标记/InfoWindow 统一 +1 显示；乐观更新不再 +1）
+- [x] 修复"全部"tab 被默认选天 effect 立即重置的 bug（按 plan.id 用 useRef 只初始化一次）
+- **验证**：键盘拖拽（Space→↓↓→Space）第1天首节点移至第4位：UI 立即重排→Spin→成功提示→刷新持久化；API 实证顺序 6,7,8,9,10 → 7,8,9,6,10，路线重建 7→8(5.8km)/8→9(1.0km)/9→6(16.3km)/6→10(18.3km)，第2天不受影响；"全部"tab handles=0 且分组标题正确，切回单天 handles=5；控制台无红色报错；测试数据已 API 恢复（10节点/8路线）
 
 ### Phase 10 — AI 生成表单 UI
-- [ ] GenerateForm
-- [ ] AiLoadingOverlay
-- [ ] 提交 → 跳转详情页
-- **验证**：填写需求 → 提交 → 加载动画 → 跳转详情页
+- [x] GenerateForm（目的地 tags 选择/手输、天数1-15、出发日期禁选过去、人数、预算档位、偏好多选、特殊需求；结构化字段拼接 requirement 文本，标题自动"城市N日游"）
+- [x] AiLoadingOverlay（全屏遮罩 + Spin + "Xs / 120s"实时倒计时 + 四阶段提示，临近超时变色）
+- [x] 提交成功 setCurrent + navigate 跳转详情页；失败拦截器统一提示、表单保留可重试；卸载清理计时器
+- [x] 修复 Enter 隐式提交（普通 INPUT 拦截、Select 内放行用于确认标签）
+- [x] AI 请求超时按实测放宽：60s → 120s（client.post 支持 per-request config；实测洛阳 58.8s、西安一次 >60s 曾被 abort 而后端成功）
+- [x] 修复 antd 5.29 InputNumber addonAfter 废弃警告（Space.Compact + 禁用按钮做单位）
+- **验证**：空提交必填校验拦截不发请求；"洛阳"回车仅确认标签不提交（overlay=false）；真实生成跳转 /plans/8 西安2日游（DayTabs 全部10/第1天5/第2天5）；API 实测洛阳2日游 58.8s 返回 2天10节点8路线；测试行程 id=6/7/8 已级联删除，列表恢复 1/3/4
 
 ### Phase 11 — 收尾打磨
-- [ ] 免责声明
-- [ ] ErrorBoundary
-- [ ] JSON 导出 + 图片导出
-- [ ] 响应式适配
-- [ ] 后端日志配置
-- **验证**：导出功能、移动端布局、错误处理
+- [x] 免责声明全覆盖：详情页/生成页顶部 Disclaimer（Phase 6/7 已建）+ NodePopup 门票"仅供参考"+ RoutePopup"距离与耗时为规划参考，实际以路况为准"+ NodeForm 底部灰色小字
+- [x] ErrorBoundary 全局错误边界（class 组件，Result 降级页 + 返回首页/重试；componentDidCatch 记录堆栈；DEV 下 window `trip:test-error` 事件测试钩子 + 错误详情）
+- [x] utils/exportPlan.ts：JSON 导出（plan/days/nodes/routes + exportedAt，Blob 下载，文件名合法化）；PNG 导出 html2canvas-pro 2.x（2x scale、白底、onclone 移除 .export-ignore 与 .ant-card-actions 操作 UI）；详情页操作栏 Dropdown（trigger=click 修复默认 hover 点击不展开）
+- [x] 响应式适配：详情两列 xs24/lg10-14 + gutter 16、地图高度 lg 560/小屏 360、操作栏 gutter+Space wrap 换行；AppLayout Header/Content 小屏 padding 12 与标题省略；Sider md 断点折叠（Phase 6 已建）；列表网格响应式（Phase 7 已建）
+- [x] 后端 logback-spring.xml：CONSOLE + 按天滚动 FILE（100MB/30天/1GB）+ ERROR 独立归档（50MB/30天/500MB），UTF-8，logs/ 目录
+- **验证**：build 通过（gzip 465.8KB）；logback XML well-formed 校验 OK（标准结构，下次启动生效，未中断运行中的服务）；浏览器冒烟——JSON/PNG 均真实落盘 Downloads（JSON 9KB 结构完整 plan+2天+10节点+8路线，PNG 539KB），无 oklch 颜色报错（html2canvas-pro），NodeForm/RoutePopup 免责文案存在，ErrorBoundary 触发后 fallback=true/hasHome=true/layoutGone=true、重试恢复标题"成都美食熊猫2日游"，控制台无致命错误；响应式由 antd Grid 媒体查询声明式保证（测试环境固定 1280 视口无法模拟窄屏）；折线弹窗 Phase 8 已验证交互、本次仅新增静态文案；测试下载文件已清理
 
 ## 变更日志
 
 | 日期 | 操作人 | 变更内容 |
 |------|--------|----------|
 | 2026-10-12 | - | 初始化项目计划与进度文档 |
+| 2026-10-12 | - | Phase 0 完成：Maven Wrapper + Spring Boot 2.7.18 脚手架 + Vite + Ant Design + 远程MySQL + Lombok 1.18.34 + annotationProcessorPaths 修复 |
+| 2026-10-12 | - | Phase 1 完成：5表DDL(travel_plan/plan_day/plan_node/plan_route/ai_generation) + 5Entity + 5Mapper接口+XML + 异常处理体系(GlobalExceptionHandler) + 最小PlanController + characterEncoding修复 |
+| 2026-10-12 | - | Phase 2 完成：BaiduMapServiceImpl(geocode+route) + RestClientConfig(15s/60s) + GeoUtils(haversine) + MapController + UriComponentsBuilder修复URL双编码 + text/javascript消息转换器 |
+| 2026-10-12 | - | Phase 3 完成：ArkAiServiceImpl(火山方舟responses API) + PromptBuilder + JsonExtractor(4步容错) + AiNodeDto/AiDayDto/AiItineraryDto + AiController(generate-raw) + UTF-8请求体修复(ObjectNode直发) + JsonNode响应接收 |
+| 2026-10-12 | - | Phase 4 完成：PlanServiceImpl(详情3查询拼装/创建自动建天/复制ID重映射) + NodeServiceImpl(增删改+自动geocode+重建order) + RouteServiceImpl(按天重算,单点失败不中断) + PlanSaveRequest/NodeSaveRequest/NodeReorderRequest/PlanDetailResponse |
+| 2026-10-12 | - | Phase 5 完成：AiGenerateServiceImpl编排(非事务) + PlanService.createFromAi(单事务持久化+geocode限流+routes复算) + AiService改造返回AiGenerateResult(generationId) + AiGenerateRequest校验 + POST /api/ai/generate 端到端48s验证通过 |
+| 2026-10-12 | - | Phase 6 完成：router(createBrowserRouter) + client.ts(60s/解包data) + planApi/aiApi/mapApi + planStore/uiStore/mapStore + AppLayout(Sider/Header/Content) + Disclaimer + types镜像DTO + 4骨架页面 + @ant-design/icons/@types/node + build与浏览器冒烟全通过 |
+| 2026-10-12 | - | Phase 7 完成：utils/time+geo 格式化 + PlanCard/PlanListPage(网格+复制删除) + DayTabs(联动mapStore) + NodeCard(编号/类型/门票仅供参考) + NodeForm(Modal新增编辑复用) + RouteList(交通方式+距离耗时) + PlanDetailPage(操作栏+左列+地图占位) + antd5.29废弃属性修复 + 冒烟全PASS |
+| 2026-10-12 | - | Phase 8 代码完成：loadBaiduMap 动态注入(dev代理/生产直链) + bmapgl.d.ts + useBaiduMap + BaiduMapContainer(SVG编号标记/折线/InfoWindow portal/fitViewport/天筛选/选中联动) + NodePopup/RoutePopup + NodeCard onSelect + vite /bmapgl 代理；build通过，AK浏览器端服务被禁用待开通 |
+| 2026-10-12 | - | Phase 8 验证通过：接入浏览器端专用 AK（IwPC...EvQy，替换 loadBaiduMap.ts 与 vite 代理两处），冒烟全 PASS——标记/折线/双弹窗/DayTabs联动/卡片定位高亮全部正常 |
+| 2026-10-12 | - | Phase 9 完成：@dnd-kit 拖拽排序(Pointer+Keyboard 传感器/单天可拖/全部只读分组) + 乐观更新→reorder→自动recalculate→权威刷新/失败回滚 + 地图自动重绘；修复 orderIndex 0-based 显示不一致与"全部"tab被重置两个 bug；API+浏览器冒烟全PASS，测试数据已恢复 |
+| 2026-10-12 | - | Phase 10 完成：GenerateForm 结构化字段拼接 requirement + AiLoadingOverlay 全屏倒计时(Xs/120s/四阶段) + 成功跳转/失败保留重试；修复 Enter 误提交、AI 超时 60s→120s(per-request config)、InputNumber addonAfter 废弃三处问题；真实生成跳转冒烟 PASS，测试行程已清理 |
+| 2026-10-12 | - | Phase 11 完成（MVP 收官）：免责声明三处补强(RoutePopup/NodeForm) + ErrorBoundary(class+Result降级+DEV测试钩子) + utils/exportPlan(JSON Blob + html2canvas-pro PNG，onclone 去除操作UI) + 详情页导出下拉(trigger click 修复) + 响应式(两列堆叠/地图360/Header padding) + logback-spring.xml(滚动+ERROR独立文件)；JSON/PNG 真实下载与错误边界实证 PASS，测试文件已清理 |

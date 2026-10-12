@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trip.planner.mapper.PlanNodeMapper">
+
+    <resultMap id="BaseResultMap" type="com.trip.planner.entity.PlanNode">
+        <id column="id" property="id"/>
+        <result column="plan_id" property="planId"/>
+        <result column="day_id" property="dayId"/>
+        <result column="place_name" property="placeName"/>
+        <result column="place_type" property="placeType"/>
+        <result column="lat" property="lat"/>
+        <result column="lng" property="lng"/>
+        <result column="order_index" property="orderIndex"/>
+        <result column="suggested_duration" property="suggestedDuration"/>
+        <result column="highlight" property="highlight"/>
+        <result column="description" property="description"/>
+        <result column="open_time" property="openTime"/>
+        <result column="ticket_info" property="ticketInfo"/>
+        <result column="transport_from_prev" property="transportFromPrev"/>
+        <result column="estimated_cost" property="estimatedCost"/>
+        <result column="note" property="note"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, plan_id, day_id, place_name, place_type, lat, lng, order_index,
+        suggested_duration, highlight, description, open_time, ticket_info,
+        transport_from_prev, estimated_cost, note
+    </sql>
+
+    <insert id="insert" parameterType="com.trip.planner.entity.PlanNode" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO plan_node (plan_id, day_id, place_name, place_type, lat, lng, order_index,
+            suggested_duration, highlight, description, open_time, ticket_info,
+            transport_from_prev, estimated_cost, note)
+        VALUES (#{planId}, #{dayId}, #{placeName}, #{placeType}, #{lat}, #{lng}, #{orderIndex},
+            #{suggestedDuration}, #{highlight}, #{description}, #{openTime}, #{ticketInfo},
+            #{transportFromPrev}, #{estimatedCost}, #{note})
+    </insert>
+
+    <insert id="batchInsert" parameterType="java.util.List">
+        INSERT INTO plan_node (plan_id, day_id, place_name, place_type, lat, lng, order_index,
+            suggested_duration, highlight, description, open_time, ticket_info,
+            transport_from_prev, estimated_cost, note) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.planId}, #{item.dayId}, #{item.placeName}, #{item.placeType}, #{item.lat}, #{item.lng},
+             #{item.orderIndex}, #{item.suggestedDuration}, #{item.highlight}, #{item.description},
+             #{item.openTime}, #{item.ticketInfo}, #{item.transportFromPrev}, #{item.estimatedCost}, #{item.note})
+        </foreach>
+    </insert>
+
+    <update id="update" parameterType="com.trip.planner.entity.PlanNode">
+        UPDATE plan_node
+        <set>
+            <if test="placeName != null">place_name = #{placeName},</if>
+            <if test="placeType != null">place_type = #{placeType},</if>
+            <if test="lat != null">lat = #{lat},</if>
+            <if test="lng != null">lng = #{lng},</if>
+            <if test="orderIndex != null">order_index = #{orderIndex},</if>
+            <if test="suggestedDuration != null">suggested_duration = #{suggestedDuration},</if>
+            <if test="highlight != null">highlight = #{highlight},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="openTime != null">open_time = #{openTime},</if>
+            <if test="ticketInfo != null">ticket_info = #{ticketInfo},</if>
+            <if test="transportFromPrev != null">transport_from_prev = #{transportFromPrev},</if>
+            <if test="estimatedCost != null">estimated_cost = #{estimatedCost},</if>
+            <if test="note != null">note = #{note},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM plan_node WHERE id = #{id}
+    </delete>
+
+    <delete id="deleteByPlanId">
+        DELETE FROM plan_node WHERE plan_id = #{planId}
+    </delete>
+
+    <delete id="deleteByDayId">
+        DELETE FROM plan_node WHERE day_id = #{dayId}
+    </delete>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM plan_node WHERE id = #{id}
+    </select>
+
+    <select id="selectByPlanId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM plan_node WHERE plan_id = #{planId} ORDER BY day_id, order_index
+    </select>
+
+    <select id="selectByDayId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM plan_node WHERE day_id = #{dayId} ORDER BY order_index
+    </select>
+
+</mapper>

@@ -28,7 +28,8 @@ curl --location 'https://ark.cn-beijing.volces.com/api/v3/responses' \
 ********AI 调用模块结束*****
 
 ********地图API 调用模块*******
-百度地图AK：SQWFoL8hiHpxV6ULOWTAmB7P9qJ5vfpL
+百度地图服务端AK：SQWFoL8hiHpxV6ULOWTAmB7P9qJ5vfpL
+百度地图浏览器端AK：IwPC9IpdUBx2lRel17WexwWX3V4zEvQy
 ********地图API 调用结束*******
 
 ### git 私人令牌

@@ -1,0 +1,69 @@
+import { useEffect, useRef, useState } from 'react';
+import { Card, Typography } from 'antd';
+import { useNavigate } from 'react-router-dom';
+import { aiApi } from '@/api/aiApi';
+import { usePlanStore } from '@/store/planStore';
+import Disclaimer from '@/components/common/Disclaimer';
+import GenerateForm, { type GenerateFormValues } from '@/components/ai/GenerateForm';
+import AiLoadingOverlay from '@/components/ai/AiLoadingOverlay';
+import type { AiGenerateRequest } from '@/types/ai';
+
+const { Title, Paragraph } = Typography;
+
+/** AI 生成页：结构化表单 → 全屏加载（倒计时）→ 成功跳转详情 / 失败保留重试 */
+export default function GeneratePage() {
+  const navigate = useNavigate();
+  const setCurrent = usePlanStore((s) => s.setCurrent);
+  const [submitting, setSubmitting] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) window.clearInterval(timerRef.current);
+    };
+  }, []);
+
+  const startTimer = () => {
+    setElapsed(0);
+    timerRef.current = window.setInterval(() => setElapsed((s) => s + 1), 1000);
+  };
+
+  const stopTimer = () => {
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const handleSubmit = async (_values: GenerateFormValues, payload: AiGenerateRequest) => {
+    setSubmitting(true);
+    startTimer();
+    try {
+      const detail = await aiApi.generate(payload);
+      setCurrent(detail);
+      navigate(`/plans/${detail.plan.id}`);
+    } catch {
+      // 拦截器已统一 message 提示；表单值保留，用户可直接重试
+    } finally {
+      stopTimer();
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: 720, margin: '0 auto' }}>
+      <Disclaimer />
+      <Card style={{ marginTop: 24 }}>
+        <Title level={4} style={{ marginBottom: 4 }}>
+          AI 生成行程
+        </Title>
+        <Paragraph type="secondary">
+          填写你的旅行需求，AI 将在约 30-90 秒内生成包含每日安排、景点、餐饮与路线的完整攻略。
+        </Paragraph>
+        <GenerateForm submitting={submitting} onSubmit={handleSubmit} />
+      </Card>
+      {submitting && <AiLoadingOverlay elapsed={elapsed} timeoutSeconds={120} />}
+    </div>
+  );
+}

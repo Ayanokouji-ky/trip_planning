@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trip.planner.mapper.AiGenerationMapper">
+
+    <resultMap id="BaseResultMap" type="com.trip.planner.entity.AiGeneration">
+        <id column="id" property="id"/>
+        <result column="plan_id" property="planId"/>
+        <result column="input_type" property="inputType"/>
+        <result column="input_content" property="inputContent"/>
+        <result column="model_name" property="modelName"/>
+        <result column="prompt" property="prompt"/>
+        <result column="output_json" property="outputJson"/>
+        <result column="status" property="status"/>
+        <result column="error_message" property="errorMessage"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, plan_id, input_type, input_content, model_name, prompt, output_json, status, error_message, created_at
+    </sql>
+
+    <insert id="insert" parameterType="com.trip.planner.entity.AiGeneration" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ai_generation (plan_id, input_type, input_content, model_name, prompt, output_json, status, error_message)
+        VALUES (#{planId}, #{inputType}, #{inputContent}, #{modelName}, #{prompt}, #{outputJson}, #{status}, #{errorMessage})
+    </insert>
+
+    <update id="updateStatus">
+        UPDATE ai_generation
+        SET status = #{status}, error_message = #{errorMessage}
+        <if test="planId != null">
+            , plan_id = #{planId}
+        </if>
+        WHERE id = #{id}
+    </update>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM ai_generation WHERE id = #{id}
+    </select>
+
+</mapper>

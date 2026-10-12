@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trip.planner.mapper.PlanDayMapper">
+
+    <resultMap id="BaseResultMap" type="com.trip.planner.entity.PlanDay">
+        <id column="id" property="id"/>
+        <result column="plan_id" property="planId"/>
+        <result column="day_index" property="dayIndex"/>
+        <result column="date" property="date"/>
+        <result column="summary" property="summary"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, plan_id, day_index, date, summary
+    </sql>
+
+    <insert id="insert" parameterType="com.trip.planner.entity.PlanDay" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO plan_day (plan_id, day_index, date, summary)
+        VALUES (#{planId}, #{dayIndex}, #{date}, #{summary})
+    </insert>
+
+    <insert id="batchInsert" parameterType="java.util.List">
+        INSERT INTO plan_day (plan_id, day_index, date, summary) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.planId}, #{item.dayIndex}, #{item.date}, #{item.summary})
+        </foreach>
+    </insert>
+
+    <update id="update" parameterType="com.trip.planner.entity.PlanDay">
+        UPDATE plan_day
+        <set>
+            <if test="dayIndex != null">day_index = #{dayIndex},</if>
+            <if test="date != null">date = #{date},</if>
+            <if test="summary != null">summary = #{summary},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteByPlanId">
+        DELETE FROM plan_day WHERE plan_id = #{planId}
+    </delete>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM plan_day WHERE id = #{id}
+    </select>
+
+    <select id="selectByPlanId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM plan_day WHERE plan_id = #{planId} ORDER BY day_index
+    </select>
+
+</mapper>

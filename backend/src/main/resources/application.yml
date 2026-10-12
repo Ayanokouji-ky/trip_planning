@@ -1,0 +1,55 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: trip-planner
+  mvc:
+    throw-exception-if-no-handler-found: true
+  web:
+    resources:
+      add-mappings: false
+  datasource:
+    url: jdbc:mysql://101.34.51.42:3306/trip_planning?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: sceley
+    password: shiyi9010
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  jackson:
+    default-property-inclusion: non_null
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.trip.planner.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    cache-enabled: true
+    lazy-loading-enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.trip.planner: DEBUG
+    org.springframework.web: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+app:
+  baidu:
+    ak: SQWFoL8hiHpxV6ULOWTAmB7P9qJ5vfpL
+    geocode-url: https://api.map.baidu.com/geocoding/v3/
+    route-url: https://api.map.baidu.com/direction/v2/driving
+  ai:
+    api-key: ark-cad8d48c-f35b-4dd9-82df-35cc174af75d-55b4c
+    endpoint: https://ark.cn-beijing.volces.com/api/v3/responses
+    model: deepseek-v4-1-flash-260910
+    timeout-ms: 60000
