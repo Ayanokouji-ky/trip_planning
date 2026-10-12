@@ -1,0 +1,32 @@
+services:
+  backend:
+    build: ./backend
+    image: trip-planner-backend:1.0
+    container_name: trip-planner-backend
+    env_file:
+      - .env
+    restart: always
+    expose:
+      - "8080"
+    volumes:
+      - ./logs:/app/logs
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  frontend:
+    build: ./frontend
+    image: trip-planner-frontend:1.0
+    container_name: trip-planner-frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"

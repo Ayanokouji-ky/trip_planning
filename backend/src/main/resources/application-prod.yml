@@ -1,0 +1,32 @@
+# ===== 生产环境配置（profile=prod）=====
+# 与基础 application.yml 叠加，同名属性以本文件为准。
+# 所有环境相关值通过环境变量注入（见部署包 .env），不在镜像中固化敏感信息。
+spring:
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT:3306}/${MYSQL_DB}?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+logging:
+  level:
+    root: INFO
+    com.trip.planner: INFO
+    org.springframework.web: INFO
+
+app:
+  cors:
+    # 允许的前端来源，逗号分隔；默认 * 放行全部，可按 http://IP,https://域名 收紧
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
+  baidu:
+    # 服务端 AK（geocode / route）
+    ak: ${BAIDU_SERVER_AK}
+  ai:
+    # 火山方舟 API Key
+    api-key: ${ARK_API_KEY}
