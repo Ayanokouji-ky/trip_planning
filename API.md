@@ -30,3 +30,9 @@ curl --location 'https://ark.cn-beijing.volces.com/api/v3/responses' \
 ********地图API 调用模块*******
 百度地图AK：SQWFoL8hiHpxV6ULOWTAmB7P9qJ5vfpL
 ********地图API 调用结束*******
+
+### git 私人令牌
+ee6dbd56ec5e690b28eca5502a6c599a
+
+### gti 仓库地址
+https://gitee.com/Ayanokouji/trip_planning.git
