@@ -2,6 +2,8 @@ package com.trip.planner.service;
 
 import com.trip.planner.dto.ai.AiGenerateResult;
 
+import java.util.List;
+
 public interface AiService {
 
     /**
@@ -19,4 +21,14 @@ public interface AiService {
      * @param model           指定模型 ID（可为 null）
      */
     AiGenerateResult generateItinerary(String userRequirement, String model);
+
+    /**
+     * 通过图片识别行程（Phase 14）。
+     * model 为 null/空时使用默认识图模型；不在识图白名单中时抛 BusinessException(400)；
+     * 识图模型不可用时降级到默认识图模型，结果中 degraded=true。
+     *
+     * @param imageDataUrls 图片的 base64 data URL（data:image/jpeg;base64,...）列表
+     * @param model         指定识图模型 ID（可为 null）
+     */
+    AiGenerateResult recognizeItineraryFromImages(List<String> imageDataUrls, String model);
 }

@@ -24,6 +24,8 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.List;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -102,18 +104,112 @@ public class ArkAiServiceImpl implements AiService {
         }
     }
 
+    @Override
+    public AiGenerateResult recognizeItineraryFromImages(List<String> imageDataUrls, String model) {
+        AppProperties.Ai ai = appProperties.getAi();
+        int imageCount = imageDataUrls == null ? 0 : imageDataUrls.size();
+        String prompt = PromptBuilder.buildImageSystemPrompt() + "\n\n"
+                + PromptBuilder.buildImageUserPrompt(imageCount);
+
+        // 解析实际使用的模型：空 → 默认识图模型；非识图白名单 → 400
+        boolean degraded = false;
+        String actualModel = model;
+        if (actualModel == null || actualModel.trim().isEmpty()) {
+            actualModel = ModelConstants.DEFAULT_IMAGE_MODEL;
+        } else if (!ModelConstants.isValidImageModel(actualModel)) {
+            throw new BusinessException(400, "不支持的识图模型: " + actualModel);
+        }
+
+        // 写入 PENDING 记录
+        AiGeneration record = new AiGeneration();
+        record.setInputType("IMAGE");
+        record.setInputContent("共 " + imageCount + " 张图片");
+        record.setModelName(actualModel);
+        record.setPrompt(prompt);
+        record.setStatus("PENDING");
+        aiGenerationMapper.insert(record);
+
+        try {
+            // 构造 user 消息 content：首个文本提示 + N 个图片片段
+            ArrayNode content = MAPPER.createArrayNode();
+            ObjectNode textPart = content.addObject();
+            textPart.put("type", "input_text");
+            textPart.put("text", prompt);
+            if (imageDataUrls != null) {
+                for (String dataUrl : imageDataUrls) {
+                    ObjectNode imgPart = content.addObject();
+                    imgPart.put("type", "input_image");
+                    imgPart.put("image_url", dataUrl);
+                }
+            }
+
+            String rawOutput;
+            try {
+                rawOutput = callArkApiWithContent(ai, actualModel, content, true);
+            } catch (org.springframework.web.client.RestClientException e) {
+                // 识图模型可能不可用，降级到默认识图模型重试
+                if (!actualModel.equals(ModelConstants.DEFAULT_IMAGE_MODEL)) {
+                    log.warn("Image model {} call failed ({}), degrading to default {}",
+                            actualModel, e.getMessage(), ModelConstants.DEFAULT_IMAGE_MODEL);
+                    degraded = true;
+                    actualModel = ModelConstants.DEFAULT_IMAGE_MODEL;
+                    rawOutput = callArkApiWithContent(ai, actualModel, content, true);
+                } else {
+                    throw e;
+                }
+            }
+            record.setOutputJson(rawOutput);
+            AiItineraryDto itinerary = JsonExtractor.extract(rawOutput, AiItineraryDto.class);
+            validate(itinerary);
+            aiGenerationMapper.updateStatus(record.getId(), "SUCCESS", null, null);
+            log.info("Image recognition SUCCESS, recordId={}, model={}, images={}, degraded={}",
+                    record.getId(), actualModel, imageCount, degraded);
+            return new AiGenerateResult(record.getId(), itinerary, degraded, actualModel);
+        } catch (org.springframework.web.client.RestClientException e) {
+            log.error("Image recognition FAILED (network), recordId={}", record.getId(), e);
+            aiGenerationMapper.updateStatus(record.getId(), "FAILED", e.getMessage(), null);
+            throw new AiGenerationException("识图调用失败（网络错误）: " + e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("Image recognition FAILED, recordId={}", record.getId(), e);
+            aiGenerationMapper.updateStatus(record.getId(), "FAILED", e.getMessage(), null);
+            throw e instanceof AiGenerationException
+                    ? (AiGenerationException) e
+                    : new AiGenerationException("识图调用失败: " + e.getMessage(), e);
+        }
+    }
+
     private String callArkApi(AppProperties.Ai ai, String model, String prompt) {
+        ArrayNode content = MAPPER.createArrayNode();
+        ObjectNode textPart = content.addObject();
+        textPart.put("type", "input_text");
+        textPart.put("text", prompt);
+        return callArkApiWithContent(ai, model, content);
+    }
+
+    /**
+     * 调用 Ark responses API，content 为一条 user 消息的内容片段数组（文本 + 可选图片）。
+     */
+    private String callArkApiWithContent(AppProperties.Ai ai, String model, ArrayNode content) {
+        return callArkApiWithContent(ai, model, content, false);
+    }
+
+    /**
+     * 调用 Ark responses API。
+     *
+     * @param disableThinking 为 true 时关闭模型思考链（识图场景），可显著缩短响应时间
+     */
+    private String callArkApiWithContent(AppProperties.Ai ai, String model, ArrayNode content, boolean disableThinking) {
         ObjectNode body = MAPPER.createObjectNode();
         body.put("model", model);
         body.put("stream", false);
+        if (disableThinking) {
+            body.putObject("thinking").put("type", "disabled");
+        }
 
         ArrayNode input = body.putArray("input");
         ObjectNode userMsg = input.addObject();
         userMsg.put("role", "user");
-        ArrayNode content = userMsg.putArray("content");
-        ObjectNode textPart = content.addObject();
-        textPart.put("type", "input_text");
-        textPart.put("text", prompt);
+        userMsg.set("content", content);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);

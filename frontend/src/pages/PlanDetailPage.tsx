@@ -3,9 +3,9 @@ import {
   Button,
   Card,
   Col,
+  Drawer,
   Dropdown,
   Empty,
-  Grid,
   message,
   Popconfirm,
   Row,
@@ -28,14 +28,17 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { usePlanStore } from '@/store/planStore';
 import { useMapStore } from '@/store/mapStore';
 import { planApi } from '@/api/planApi';
-import type { NodeSaveRequest, PlanNode } from '@/types/plan';
+import type { NodeSaveRequest, PlanDetailResponse, PlanNode } from '@/types/plan';
 import { exportElementPng, exportPlanJson } from '@/utils/exportPlan';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import Disclaimer from '@/components/common/Disclaimer';
 import DayTabs from '@/components/plan/DayTabs';
 import NodeCard from '@/components/plan/NodeCard';
 import NodeForm from '@/components/plan/NodeForm';
 import RouteList from '@/components/plan/RouteList';
 import DraggableNodeList from '@/components/plan/DraggableNodeList';
+import BottomTabBar, { type BottomTab } from '@/components/plan/BottomTabBar';
+import NodeDetailOverlay from '@/components/plan/NodeDetailOverlay';
 import BaiduMapContainer from '@/components/map/BaiduMapContainer';
 
 const { Title, Paragraph } = Typography;
@@ -45,7 +48,7 @@ export default function PlanDetailPage() {
   const { id } = useParams<{ id: string }>();
   const planId = Number(id);
   const navigate = useNavigate();
-  const screens = Grid.useBreakpoint();
+  const { screens, isMobile } = useBreakpoint();
   const { current, detailLoading, fetchDetail, clearCurrent, setCurrent } = usePlanStore();
   const { activeDayId, setActiveDay, selectedNodeId, selectNode, reset: resetMap } =
     useMapStore();
@@ -56,6 +59,10 @@ export default function PlanDetailPage() {
   const [recalculating, setRecalculating] = useState(false);
   const [reordering, setReordering] = useState(false);
   const [exportingImg, setExportingImg] = useState(false);
+  // 窄屏：底部 Tab（地图/列表/详情）+ 列表抽屉 + 节点详情覆盖层
+  const [mobileTab, setMobileTab] = useState<BottomTab>('map');
+  const [listOpen, setListOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
   const itineraryRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -216,6 +223,77 @@ export default function PlanDetailPage() {
     }
   };
 
+  /** 窄屏 Tab 切换：重复点击当前 Tab 回到地图视图 */
+  const handleTabChange = (tab: BottomTab) => {
+    if (tab === mobileTab) {
+      setMobileTab('map');
+      setListOpen(false);
+      setDetailOpen(false);
+      return;
+    }
+    setMobileTab(tab);
+    setListOpen(tab === 'list');
+    setDetailOpen(tab === 'detail');
+  };
+
+  /** 窄屏点击节点卡片 → 全屏详情覆盖层（地图同时联动定位） */
+  const handleMobileSelect = (n: PlanNode) => {
+    selectNode(n.id);
+    setMobileTab('detail');
+    setListOpen(false);
+    setDetailOpen(true);
+  };
+
+  const openNodeForm = (n: PlanNode) => {
+    setEditingNode(n);
+    setFormOpen(true);
+  };
+
+  /** 行程主体（天切换 + 节点列表 + 路线），桌面卡片 / 移动抽屉复用 */
+  const renderItineraryBody = (onSelect: (n: PlanNode) => void) => (
+    <>
+      <DayTabs days={current!.days} nodes={current!.nodes} />
+      {visibleNodes.length === 0 ? (
+        <Empty description="当天还没有节点" />
+      ) : activeDayId != null ? (
+        <DraggableNodeList
+          nodes={visibleNodes}
+          selectedNodeId={selectedNodeId}
+          onReorder={(orderedIds) => handleReorder(activeDayId, orderedIds)}
+          onSelect={onSelect}
+          onEdit={openNodeForm}
+          onDelete={handleDeleteNode}
+        />
+      ) : (
+        // 全部天：按天分组展示，不支持跨天拖拽
+        [...current!.days]
+          .sort((a, b) => a.dayIndex - b.dayIndex)
+          .map((day) => {
+            const dayNodes = visibleNodes.filter((n) => n.dayId === day.id);
+            if (dayNodes.length === 0) return null;
+            return (
+              <div key={day.id} style={{ marginBottom: 8 }}>
+                <Paragraph type="secondary" style={{ margin: '8px 0 4px', fontWeight: 600 }}>
+                  第 {day.dayIndex} 天
+                </Paragraph>
+                {dayNodes.map((node) => (
+                  <NodeCard
+                    key={node.id}
+                    node={node}
+                    active={selectedNodeId === node.id}
+                    onSelect={onSelect}
+                    onEdit={openNodeForm}
+                    onDelete={handleDeleteNode}
+                  />
+                ))}
+              </div>
+            );
+          })
+      )}
+      <RouteList routes={current!.routes} nodes={current!.nodes} visibleNodeIds={visibleNodeIds} />
+    </>
+  );
+
   return (
     <Spin spinning={detailLoading}>
       <Disclaimer />
@@ -283,11 +361,21 @@ export default function PlanDetailPage() {
             )}
           </Card>
 
-          <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-            {/* 左列：天切换 + 节点列表 + 路线（图片导出区域） */}
-            <Col xs={24} lg={10}>
-              <div ref={itineraryRef}>
-              <Card
+          {isMobile ? (
+            <>
+              {/* 窄屏：地图为主视图（60vh），列表收进底部抽屉，不挤压地图 */}
+              <Card title="地图" styles={{ body: { padding: 8 } }} style={{ marginTop: 16 }}>
+                <BaiduMapContainer nodes={visibleNodes} routes={current.routes} height="60vh" />
+              </Card>
+
+              <Drawer
+                placement="bottom"
+                height="75vh"
+                open={listOpen}
+                onClose={() => {
+                  setListOpen(false);
+                  setMobileTab('map');
+                }}
                 title={
                   <Space size={8}>
                     行程安排
@@ -296,7 +384,6 @@ export default function PlanDetailPage() {
                 }
                 extra={
                   <Button
-                    className="export-ignore"
                     type="primary"
                     size="small"
                     icon={<PlusOutlined />}
@@ -308,74 +395,73 @@ export default function PlanDetailPage() {
                     新增节点
                   </Button>
                 }
+                styles={{ body: { padding: '12px 16px' } }}
               >
-                <DayTabs days={current.days} nodes={current.nodes} />
-                {visibleNodes.length === 0 ? (
-                  <Empty description="当天还没有节点" />
-                ) : activeDayId != null ? (
-                  <DraggableNodeList
-                    nodes={visibleNodes}
-                    selectedNodeId={selectedNodeId}
-                    onReorder={(orderedIds) => handleReorder(activeDayId, orderedIds)}
-                    onSelect={(n) => selectNode(n.id)}
-                    onEdit={(n) => {
-                      setEditingNode(n);
-                      setFormOpen(true);
-                    }}
-                    onDelete={handleDeleteNode}
-                  />
-                ) : (
-                  // 全部天：按天分组展示，不支持跨天拖拽
-                  [...current.days]
-                    .sort((a, b) => a.dayIndex - b.dayIndex)
-                    .map((day) => {
-                      const dayNodes = visibleNodes.filter((n) => n.dayId === day.id);
-                      if (dayNodes.length === 0) return null;
-                      return (
-                        <div key={day.id} style={{ marginBottom: 8 }}>
-                          <Paragraph
-                            type="secondary"
-                            style={{ margin: '8px 0 4px', fontWeight: 600 }}
-                          >
-                            第 {day.dayIndex} 天
-                          </Paragraph>
-                          {dayNodes.map((node) => (
-                            <NodeCard
-                              key={node.id}
-                              node={node}
-                              active={selectedNodeId === node.id}
-                              onSelect={(n) => selectNode(n.id)}
-                              onEdit={(n) => {
-                                setEditingNode(n);
-                                setFormOpen(true);
-                              }}
-                              onDelete={handleDeleteNode}
-                            />
-                          ))}
-                        </div>
-                      );
-                    })
-                )}
-                <RouteList
-                  routes={current.routes}
-                  nodes={current.nodes}
-                  visibleNodeIds={visibleNodeIds}
-                />
-              </Card>
-              </div>
-            </Col>
+                <div ref={itineraryRef}>{renderItineraryBody(handleMobileSelect)}</div>
+              </Drawer>
 
-            {/* 右列：百度地图 */}
-            <Col xs={24} lg={14}>
-              <Card title="地图" styles={{ body: { padding: 8 } }}>
-                <BaiduMapContainer
-                  nodes={visibleNodes}
-                  routes={current.routes}
-                  height={screens.lg ? 560 : 360}
-                />
-              </Card>
-            </Col>
-          </Row>
+              {/* 窄屏节点详情：全屏覆盖 + 左右滑动切换 */}
+              <NodeDetailOverlay
+                open={detailOpen}
+                nodes={visibleNodes}
+                selectedNodeId={selectedNodeId}
+                onSelect={(n) => selectNode(n.id)}
+                onClose={() => {
+                  setDetailOpen(false);
+                  setMobileTab('map');
+                }}
+                onEdit={openNodeForm}
+                onDelete={handleDeleteNode}
+              />
+
+              <BottomTabBar active={mobileTab} onChange={handleTabChange} />
+              {/* 固定 Tab 栏占位，避免遮挡页脚 */}
+              <div style={{ height: 64 }} />
+            </>
+          ) : (
+            <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+              {/* 左列：天切换 + 节点列表 + 路线（图片导出区域） */}
+              <Col xs={24} lg={10}>
+                <div ref={itineraryRef}>
+                  <Card
+                    title={
+                      <Space size={8}>
+                        行程安排
+                        {reordering && <Spin size="small" />}
+                      </Space>
+                    }
+                    extra={
+                      <Button
+                        className="export-ignore"
+                        type="primary"
+                        size="small"
+                        icon={<PlusOutlined />}
+                        onClick={() => {
+                          setEditingNode(null);
+                          setFormOpen(true);
+                        }}
+                      >
+                        新增节点
+                      </Button>
+                    }
+                  >
+                    {renderItineraryBody((n) => selectNode(n.id))}
+                  </Card>
+                </div>
+              </Col>
+
+              {/* 右列：百度地图 */}
+              <Col xs={24} lg={14}>
+                <Card title="地图" styles={{ body: { padding: 8 } }}>
+                  <BaiduMapContainer
+                    nodes={visibleNodes}
+                    routes={current.routes}
+                    height={screens.lg ? 560 : 360}
+                  />
+                </Card>
+              </Col>
+            </Row>
+          )}
 
           <NodeForm
             open={formOpen}

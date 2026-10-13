@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Card, Typography, message } from 'antd';
+import { Card, Tabs, Typography, message } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { aiApi } from '@/api/aiApi';
 import { usePlanStore } from '@/store/planStore';
 import Disclaimer from '@/components/common/Disclaimer';
 import GenerateForm, { type GenerateFormValues } from '@/components/ai/GenerateForm';
 import AiLoadingOverlay from '@/components/ai/AiLoadingOverlay';
+import ImageImportPanel from '@/components/image/ImageImportPanel';
 import type { AiGenerateRequest } from '@/types/ai';
 
 const { Title, Paragraph } = Typography;
@@ -62,11 +63,29 @@ export default function GeneratePage() {
           AI 生成行程
         </Title>
         <Paragraph type="secondary">
-          填写你的旅行需求，AI 将在约 30-90 秒内生成包含每日安排、景点、餐饮与路线的完整攻略。
+          填写旅行需求由 AI 生成攻略，或上传攻略 / 行程图片由 AI 识别后生成行程。
         </Paragraph>
-        <GenerateForm submitting={submitting} onSubmit={handleSubmit} />
+        <Tabs
+          defaultActiveKey="text"
+          items={[
+            {
+              key: 'text',
+              label: '文本生成',
+              children: (
+                <>
+                  <GenerateForm submitting={submitting} onSubmit={handleSubmit} />
+                  {submitting && <AiLoadingOverlay elapsed={elapsed} timeoutSeconds={120} />}
+                </>
+              ),
+            },
+            {
+              key: 'image',
+              label: '图片导入',
+              children: <ImageImportPanel />,
+            },
+          ]}
+        />
       </Card>
-      {submitting && <AiLoadingOverlay elapsed={elapsed} timeoutSeconds={120} />}
     </div>
   );
 }

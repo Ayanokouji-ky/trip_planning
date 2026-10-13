@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 @Slf4j
@@ -65,6 +66,14 @@ public class GlobalExceptionHandler {
         log.warn("No handler found: {}", e.getRequestURL());
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ApiResult.fail(404, "接口不存在: " + e.getRequestURL()));
+    }
+
+    /** 上传文件超过限制（如识图图片 > 10MB） */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResult<Void>> handleMaxUploadSize(MaxUploadSizeExceededException e) {
+        log.warn("Upload size exceeded: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResult.fail(400, "上传文件过大，单张图片请勿超过 10MB"));
     }
 
     @ExceptionHandler(Exception.class)

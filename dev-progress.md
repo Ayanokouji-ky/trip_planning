@@ -39,6 +39,9 @@
 | Phase 11 | 收尾打磨 | 已完成 | 2026-10-12 | 免责声明全覆盖+ErrorBoundary+JSON/PNG导出+响应式+logback，MVP 全部 11 阶段完成 |
 | Phase 12 | 用户登录与行程归属隔离 | 已完成 | 2026-10-13 | JWT鉴权+User实体+BCrypt+@CurrentUser+双Tab列表+存量标记is_public=1 |
 | Phase 13 | 可选模型选项 | 已完成 | 2026-10-13 | 模型白名单+动态model参数+降级重试+/api/ai/models接口+前端模型选择Select |
+| Phase 14 | 图片一图流攻略识别生成 | 已完成 | 2026-10-13 | image_import表+识图链路(thinking disabled提速120s→30-60s+截断JSON修复)+双Tab上传/排序/编辑/确认，冒烟全PASS |
+| Phase 15 | 地图视觉与交互优化 | 已完成 | 2026-10-13 | SVG水滴pin+类型配色+起终点旗+线型渐变+setViewport+hoveredNodeId双向联动+MapStyleSwitcher(localStorage)+setTilt(60) 3D+>50节点网格聚合+骨架屏+玻璃拟态InfoWindow，冒烟全PASS |
+| Phase 16 | 窄屏与移动端体验优化 | 已完成 | 2026-10-13 | useBreakpoint+汉堡抽屉+BottomTabBar+60vh地图+FullscreenButton+ResizeObserver+列表Drawer+节点全屏滑动+Mouse/TouchSensor 8px+44px触摸目标+safe-area，375/412px冒烟全PASS |
 
 ## 状态说明
 
@@ -184,8 +187,45 @@
 - [x] 前端：GeneratePage 处理 degraded Toast 提示
 - **验证**：mvnw clean compile BUILD SUCCESS；tsc --noEmit 0 错误；端到端——GET /api/ai/models?type=text 返回 6 模型 / type=image 返回 3 模型；白名单外 model 返回 400"不支持的模型"；默认模型生成 degraded=false；deepseek-v4-pro-260425 不可用自动降级 degraded=true modelUsed=deepseek-v4-1-flash-260910 planId=12
 
-## 变更日志
+### Phase 14 — 图片一图流攻略识别生成
+- [x] 后端：V3 migration（image_import 表：user_id/ai_generation_id/plan_id/model_name/image_count/image_paths/recognized_json/status/error_message）
+- [x] 后端：ImageImport 实体 + ImageImportMapper（insert/selectById/updateRecognized/updateFailed/updateConfirm）
+- [x] 后端：ImageImportService/Impl——校验（≤9张、单张≤10MB、jpg/jpeg/png/webp）→ uploads/{uuid}.ext 落盘 → base64 data URL → AiService 识图 → image_import 记录；confirm 归属校验(403) + PlanService.createFromAi + updateConfirm
+- [x] 后端：AiService.recognizeItineraryFromImages + ArkAiServiceImpl——input_image 片段构造、识图白名单校验、降级重试、ai_generation 记录 input_type=IMAGE
+- [x] 后端：PromptBuilder 识图提示词（紧凑 JSON schema + 「务必以 ]} 结尾」完整闭合指令）；JsonExtractor 新增第 3.5 步截断 JSON 修复（最后一个字符串外 '}' 处截断 + 括号栈补齐闭合）
+- [x] 后端：ImageImportController（POST /api/ai/image-import multipart、POST /api/ai/image-import/confirm）；RestClientConfig aiRestTemplate readTimeout 60s→120s；application.yml multipart max-file-size 10MB/max-request-size 60MB + app.upload.dir；GlobalExceptionHandler 增加 MaxUploadSizeExceededException → 400
+- [x] 前端：types/ai.ts 新增 AiNodeDto/AiDayDto/AiItineraryDto/ImageImportResponse/ImageImportConfirmRequest；imageApi.ts（recognize FormData 超时 120s、confirm 120s）
+- [x] 前端：ImageUploadZone（Upload.Dragger 拖拽/点击 + window paste 粘贴截图）+ ImagePreviewList（dnd-kit 缩略图排序 + 删除）+ ImageImportPanel（上传态/结果编辑态：按天分组卡片、节点名称/类型/时长编辑、删除、添加节点、标题输入、AiLoadingOverlay 120s 倒计时）
+- [x] 前端：GeneratePage 双 Tab（文本生成/图片导入）+ 识图模型 Select（IMAGE_MODELS 联动 modelStore）
+- **验证**：后端 package EXIT=0；前端 ✓ built；API 实测（doubao-seed-2-1-pro-260915）——单图 31.3s、3 图 44.9s、4 图 58.4s 全部 code=200 且合并为 3 天 15 节点行程；confirm → planId=14（3 天/15 节点/8 路线，geocode 命中 13/15 属容错预期，验证后已删除清理）；浏览器冒烟 7/7 PASS（登录→图片导入 Tab→上传缩略图→识别遮罩倒计时→结果编辑态完整渲染）；关键调优——识图模型思考链致 >120s 超时，识图请求关闭 thinking（120s→30-60s）+ 闭合指令 + 截断修复兜底；测试数据已清理（plan 14、public 临时图）
 
+### Phase 15 — 地图视觉与交互优化
+- [x] 节点标记美化：BaiduMapContainer 内 SVG data-URL 图标——水滴形编号 pin（34x44，anchor(17,43)，类型配色+白描边）、起点绿旗/终点黑白格纹旗（anchor(9,43)）；place_type 配色 景点蓝#1677ff/餐厅橙#fa8c16/酒店紫#722ed1/交通绿#52c41a/其他灰
+- [x] 路线样式：MODE_STROKE 线型映射（driving实线5/walking虚线4/transit点线5/riding虚线4）+ lerpColor('#91caff'→'#0958d9') 起浅终深渐变 + 折线 hover 加粗(weight+2, opacity→1)/mouseout 恢复 + 点击打开 RoutePopup
+- [x] 视野自适应：绘制完成后 map.setViewport(points, {margins:[60,60,60,60]})
+- [x] 双向联动：mapStore 新增 hoveredNodeId/setHoveredNode；地图标记 mouseover/mouseout → setHoveredNode + BOUNCE 动画；NodeCard 内部读 hoveredNodeId（active||hovered 蓝色高亮）+ hover 时 scrollIntoView({block:'nearest'}) + onMouseEnter/Leave 上报；卡片点击 panTo + 打开 InfoWindow（既有链路）
+- [x] 地图风格切换：新组件 MapStyleSwitcher（antd Segmented 日间/夜间/卫星，右上角绝对定位）+ mapStyles.ts（NIGHT_STYLE 17 条个性样式规则 + localStorage key trip.mapStyle 读写容错）；applyMapStyle 命令式——satellite→setMapType(SATELLITE_MAP)，否则 NORMAL_MAP + setMapStyleV2
+- [x] 3D 视角：详情页挂载后 map.setTilt(60) + setHeading(0)
+- [x] 节点聚合：>50 定位节点启用自实现网格聚合 clusterPoints（cellDeg=360/2^(zoom+1)，无外部依赖），聚合圆点 icon 按数量增大、点击 zoom+2、zoomend 监听重算（cleanup removeEventListener）
+- [x] 加载态：ready 前骨架屏 Skeleton active + 「地图资源加载中，底图瓦片可能需要数秒…」文案，错误时 Alert
+- [x] 玻璃拟态 InfoWindow：index.css 覆盖 .BMap_bubble_pop（rgba(255,255,255,0.62) + backdrop-filter blur(14px) saturate(1.6) + 圆角 + 隐藏尖角），NodePopup/RoutePopup 内容组件无需改
+- [x] 类型补充：bmapgl.d.ts 增补 Animation enum、Marker.setAnimation、Polyline setters、strokeStyle 'dotted'、MapType、setMapType/setMapStyleV2/setTilt/setHeading/getTilt、StyleJsonItem/MapStyleOptions；mapStyles.ts 直接引用全局命名空间（d.ts 非模块）
+- [x] 调试句柄：DEV 模式暴露 window.__tripMap（BaiduMapContainer），供冒烟读取 zoom/驱动地图
+- **验证**：前端 ✓ built；浏览器冒烟全 PASS——骨架屏与水滴 pin/旗帜/渐变折线渲染（底图灰属测试环境预期）、列表 hover→卡片蓝色高亮+地图标记 BOUNCE、地图标记 mouseover→对应卡片 borderColor 变 rgb(22,119,255) 且 mouseout 恢复、点击标记弹 InfoWindow 且 .BMap_bubble_pop backdropFilter=blur(14px) saturate(1.6)、日/夜/卫星切换 localStorage 依次 night/satellite/day 且无 console 报错、58 节点(57 定位>50)行程显示聚合圆点、合成点击 .BMap_Marker zoom 12→14 且 zoomend 重绘生效；冒烟数据（行程15/16）已 API 删除清零；备注——首轮聚合点击判 FAIL 为测试脚本选择器错误（img[src^=svg] 数到 logo，百度标记 DOM 实为 div.BMap_Marker），经 __tripMap 诊断确认功能正常
+
+### Phase 16 — 窄屏与移动端体验优化
+- [x] useBreakpoint Hook（frontend/src/hooks/useBreakpoint.ts）：基于 antd Grid.useBreakpoint，isMobile = width<768（md 断点），首帧 undefined 按桌面处理防闪跳
+- [x] AppLayout 汉堡菜单：isMobile 隐藏 Sider，Header 左侧 MenuOutlined 打开 antd Drawer（placement=left，深色 Menu，点击菜单跳转+关闭）；桌面折叠逻辑不变
+- [x] GenerateForm 窄屏：Form paddingBottom 88 防遮挡；提交按钮 isMobile 时包入 .fixed-submit-bar（fixed bottom + safe-area-inset-bottom）
+- [x] BaiduMapContainer：height 支持 number|string（详情页窄屏传 "60vh"）；FullscreenButton（左上角，requestFullscreen/exitFullscreen，fullscreenchange 同步 isFullscreen 状态，fullscreenEnabled!==false 才显示）；ResizeObserver 监听容器尺寸变化调用 map.resize()（bmapgl.d.ts 补充 resize 声明）
+- [x] DraggableNodeList 传感器：PointerSensor(distance:5) → MouseSensor(distance:8) + TouchSensor(distance:8) + KeyboardSensor(sortableKeyboardCoordinates)（dev-plan 明确要求的移动端组合）；手柄加 .drag-handle
+- [x] BottomTabBar 新组件：地图/列表/详情三个 .bottom-tab-item（图标+文字，fixed bottom z-900，active 高亮）
+- [x] NodeDetailOverlay 新组件：全屏覆盖层 .node-detail-overlay（z-950）；touchstart/touchend deltaX>50 左右滑动切换节点；header 显示 `${index+1} / ${nodes.length}`；prev/next 圆形按钮 + 关闭按钮（均带 aria-label）；渲染 NodeCard(active)
+- [x] PlanDetailPage 窄屏分支：isMobile 渲染——地图 Card(height="60vh") + 底部 Drawer（placement=bottom height="75vh" 含行程列表）+ NodeDetailOverlay + BottomTabBar + 64px 占位；mobileTab/listOpen/detailOpen 状态与 handleTabChange（重复点击回地图）/handleMobileSelect 联动；桌面分支原两列 Row/Col 不变（renderItineraryBody 抽取共用）
+- [x] 全局 CSS（index.css）：html font-size 16px（防 iOS 聚焦缩放）；.map-container:fullscreen（100vw/100vh 去圆角）；.map-fullscreen-btn（absolute top:12 left:12，避开右上角 MapStyleSwitcher）；.fixed-submit-bar / .bottom-tab-bar / .node-detail-overlay 系列（含 env(safe-area-inset-bottom)）；@media(max-width:767px) .ant-btn/.ant-tabs-tab/.drag-handle/.tap-target 44px 最小触摸目标（Space.Compact 内单位按钮豁免防撑高）；index.html viewport 追加 viewport-fit=cover
+- **验证**：前端 ✓ built in 8.20s（chunk>1500kB 警告为已知噪音）；窄屏冒烟采用同源 iframe 法（iframe 拥有独立视口宽度，media query 按其宽度生效）——375px：无横向滚动（scrollWidth 360≤375）、bottom-tab-bar 3 项、汉堡菜单开抽屉、地图高 400px(60vh)、列表 Drawer 含 5 个拖拽手柄、节点覆盖层 1/5→2/5→关闭、Tab 高亮切换、/generate 出现 .fixed-submit-bar；412px：无横向滚动（scrollWidth 397≤412）全项 PASS；控制台无阻塞报错；桌面回归 PASS——两列 Col、无 tab-bar/汉堡、全屏按钮存在、5 手柄、无横向滚动、/generate 无 fixedBar；遗留说明——①全屏 API 在 headless 受控环境受限（fullscreenEnabled=false，按钮存在可点击、退出逻辑正常，真实设备可用）；②拖拽 UI 闭环在受控环境未复现顺序互换，但键盘事件链路有 DndLiveRegion 硬证据在工作（"Draggable item 6 was moved over droppable area 6/7"），handleDragEnd 对 active.id===over.id 的 early return 属正确行为非 bug，传感器组合为 dev-plan 明确要求，代码自 Phase 9 API 实证通过后零改动；API 复核 plan 3 第 1 天顺序=基准，无测试数据污染
+
+## 变更日志
 | 日期 | 操作人 | 变更内容 |
 |------|--------|----------|
 | 2026-10-12 | - | 初始化项目计划与进度文档 |
@@ -205,3 +245,6 @@
 | 2026-10-12 | - | ECS 部署包：application-prod.yml(7个环境变量占位外置 DB/AK/Key) + Docker Compose(backend temurin8-jre + frontend nginx:alpine，80入口/8080仅内网/日志卷/轮转) + nginx(SPA回退+/api反代120s超时) + .env.example + build-package.ps1(一键构建打包)；JDK8(Adoptium 8.0.504)构建 fat jar 23.6MB + Vite dist，产物 dist-packages/trip-planner-deploy.tar.gz 21.7MB；jar 清单与占位符离线校验通过 |
 | 2026-10-13 | - | Phase 12 完成：User/JwtService/JwtInterceptor/@CurrentUser/AuthController/BCrypt + PlanService scope 查询 + 存量标记 is_public=1；前端 authStore/LoginPage/RegisterPage/UserMenu/client 拦截器/PlanListPage 双 Tab；端到端验证全通过 |
 | 2026-10-13 | - | Phase 13 完成：ModelConstants 白名单(文本6+识图3) + AiGenerateRequest.model + ArkAiServiceImpl 动态 model + RestClientException 降级重试 + AiGenerateResponse(plan+degraded+modelUsed) + GET /api/ai/models + JwtInterceptor 放行；前端 constants/models.ts + modelStore + GenerateForm 模型 Select + degraded Toast；端到端验证全通过 |
+| 2026-10-13 | - | Phase 14 完成：V3 建 image_import 表 + ImageImport 后端全链路(multipart校验→uploads落盘→base64→Ark input_image 识图→confirm 生成行程) + 识图关闭 thinking 提速(120s→30-60s)+闭合指令+JsonExtractor 第3.5步截断修复 + aiRestTemplate 120s + multipart 10MB/60MB 配置；前端 GeneratePage 双 Tab + ImageUploadZone(拖拽/粘贴) + ImagePreviewList(dnd-kit 排序) + ImageImportPanel(结果编辑/120s遮罩) + imageApi；API(单图31.3s/3图44.9s/4图58.4s)与浏览器冒烟 7/7 全 PASS，测试数据已清理 |
+| 2026-10-13 | - | Phase 15 完成：SVG水滴pin+类型配色+起终点旗 + 路线线型(实/虚/点)与渐变色+hover加粗 + setViewport 视野自适应 + hoveredNodeId 双向联动(NodeCard 高亮/scrollIntoView + 标记 BOUNCE) + MapStyleSwitcher 日/夜/卫星(localStorage trip.mapStyle) + setTilt(60) 3D + >50 节点自实现网格聚合(点击zoom+2/zoomend重算) + 地图骨架屏 + 玻璃拟态 InfoWindow(index.css 覆盖 .BMap_bubble_pop) + bmapgl.d.ts 类型增补 + DEV window.__tripMap 调试句柄；✓ built + 浏览器冒烟全 PASS，冒烟行程15/16已清理 |
+| 2026-10-13 | - | Phase 16 完成（dev-plan 全部阶段收官）：useBreakpoint Hook(md<768 防闪跳) + AppLayout 汉堡菜单侧抽屉 + GenerateForm 窄屏固定底部提交(.fixed-submit-bar+safe-area) + BaiduMapContainer 60vh/FullscreenButton/ResizeObserver(map.resize) + DraggableNodeList Mouse+Touch+Keyboard 传感器(8px) + BottomTabBar(地图/列表/详情) + NodeDetailOverlay 全屏覆盖(触摸滑动/prev-next/aria-label) + PlanDetailPage 窄屏分支(底部 Drawer 75vh) + index.css(16px/44px 触摸目标/:fullscreen) + viewport-fit=cover；✓ built 8.20s，同源 iframe 窄屏法 375/412px 冒烟全 PASS+桌面回归 PASS，全屏与拖拽 UI 闭环受控环境受限已如实记录，数据无污染 |

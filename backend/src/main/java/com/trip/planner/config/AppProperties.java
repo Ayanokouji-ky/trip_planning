@@ -12,6 +12,7 @@ public class AppProperties {
     private Baidu baidu = new Baidu();
     private Ai ai = new Ai();
     private Jwt jwt = new Jwt();
+    private Upload upload = new Upload();
 
     @Data
     public static class Baidu {
@@ -34,5 +35,11 @@ public class AppProperties {
         private String secret;
         /** Token 有效期（毫秒），默认 7 天 */
         private long expirationMs = 604800000L;
+    }
+
+    @Data
+    public static class Upload {
+        /** 上传图片存储目录（相对/绝对路径均可），默认 uploads */
+        private String dir = "uploads";
     }
 }

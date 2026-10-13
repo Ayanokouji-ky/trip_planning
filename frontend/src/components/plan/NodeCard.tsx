@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Card, Popconfirm, Tag, Tooltip, Typography } from 'antd';
 import {
   BankOutlined,
@@ -12,6 +13,7 @@ import {
 } from '@ant-design/icons';
 import type { PlanNode } from '@/types/plan';
 import { formatMinutes } from '@/utils/time';
+import { useMapStore } from '@/store/mapStore';
 
 const { Text, Paragraph } = Typography;
 
@@ -33,20 +35,37 @@ interface Props {
   active?: boolean;
 }
 
-/** 节点卡片：编号 + 地点名 + 类型 + 时长/亮点/门票（仅供参考） */
+/** 节点卡片：编号 + 地点名 + 类型 + 时长/亮点/门票（仅供参考）；与地图标记 hover 双向联动 */
 export default function NodeCard({ node, onEdit, onDelete, onSelect, active }: Props) {
   const typeMeta = PLACE_TYPE_META[node.placeType ?? 'OTHER'] ?? PLACE_TYPE_META.OTHER;
+  const hoveredNodeId = useMapStore((s) => s.hoveredNodeId);
+  const setHoveredNode = useMapStore((s) => s.setHoveredNode);
+  const hovered = hoveredNodeId === node.id;
+  const highlight = active || hovered;
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  /** 地图标记 hover → 列表卡片滚动到可视区 */
+  useEffect(() => {
+    if (hovered) {
+      cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [hovered]);
 
   return (
-    <Card
-      size="small"
-      style={{
-        marginBottom: 8,
-        cursor: onSelect ? 'pointer' : undefined,
-        borderColor: active ? '#1677ff' : undefined,
-        boxShadow: active ? '0 0 0 2px rgba(22,119,255,0.15)' : undefined,
-      }}
-      onClick={() => onSelect?.(node)}
+    <div
+      ref={cardRef}
+      onMouseEnter={() => setHoveredNode(node.id)}
+      onMouseLeave={() => setHoveredNode(null)}
+    >
+      <Card
+        size="small"
+        style={{
+          marginBottom: 8,
+          cursor: onSelect ? 'pointer' : undefined,
+          borderColor: highlight ? '#1677ff' : undefined,
+          boxShadow: highlight ? '0 0 0 2px rgba(22,119,255,0.15)' : undefined,
+        }}
+        onClick={() => onSelect?.(node)}
       actions={[
         <Tooltip key="edit" title="编辑节点">
           <EditOutlined
@@ -146,6 +165,7 @@ export default function NodeCard({ node, onEdit, onDelete, onSelect, active }: P
           </div>
         }
       />
-    </Card>
+      </Card>
+    </div>
   );
 }

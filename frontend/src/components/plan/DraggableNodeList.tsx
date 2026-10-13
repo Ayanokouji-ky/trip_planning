@@ -1,7 +1,8 @@
 import {
   DndContext,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCenter,
   useSensor,
   useSensors,
@@ -49,7 +50,7 @@ function SortableItem({ node, active, onSelect, onEdit, onDelete }: ItemProps) {
       <div
         {...attributes}
         {...listeners}
-        className="export-ignore"
+        className="export-ignore drag-handle"
         title="拖拽调整顺序"
         style={{
           cursor: 'grab',
@@ -96,9 +97,11 @@ export default function DraggableNodeList({
   onEdit,
   onDelete,
 }: Props) {
-  // 鼠标：移动 5px 才激活拖拽，避免与卡片点击冲突；键盘：空格开始、方向键移动、空格放下
+  // 鼠标/触摸：移动 8px 才激活拖拽，避免滚动与点击误触（触摸端手柄已 touchAction:none）；
+  // 键盘：空格开始、方向键移动、空格放下
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 

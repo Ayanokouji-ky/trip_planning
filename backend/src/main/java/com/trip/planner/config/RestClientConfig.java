@@ -27,7 +27,8 @@ public class RestClientConfig {
     public RestTemplate aiRestTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(10000);
-        factory.setReadTimeout(60000);
+        // AI 生成/识图耗时较长（实测 50-90s，多图识图更久），读取超时放宽到 120s
+        factory.setReadTimeout(120000);
         RestTemplate rt = new RestTemplate(factory);
         addJavascriptConverter(rt);
         return rt;

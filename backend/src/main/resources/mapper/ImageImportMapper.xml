@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trip.planner.mapper.ImageImportMapper">
+
+    <resultMap id="BaseResultMap" type="com.trip.planner.entity.ImageImport">
+        <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
+        <result column="ai_generation_id" property="aiGenerationId"/>
+        <result column="plan_id" property="planId"/>
+        <result column="model_name" property="modelName"/>
+        <result column="image_count" property="imageCount"/>
+        <result column="image_paths" property="imagePaths"/>
+        <result column="recognized_json" property="recognizedJson"/>
+        <result column="status" property="status"/>
+        <result column="error_message" property="errorMessage"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, user_id, ai_generation_id, plan_id, model_name, image_count, image_paths, recognized_json, status, error_message, created_at
+    </sql>
+
+    <insert id="insert" parameterType="com.trip.planner.entity.ImageImport" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO image_import (user_id, ai_generation_id, plan_id, model_name, image_count, image_paths, recognized_json, status, error_message)
+        VALUES (#{userId}, #{aiGenerationId}, #{planId}, #{modelName}, #{imageCount}, #{imagePaths}, #{recognizedJson}, #{status}, #{errorMessage})
+    </insert>
+
+    <update id="updateRecognized">
+        UPDATE image_import
+        SET status = 'RECOGNIZED', model_name = #{modelName}, recognized_json = #{recognizedJson},
+            ai_generation_id = #{aiGenerationId}, error_message = NULL
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateFailed">
+        UPDATE image_import
+        SET status = 'FAILED', error_message = #{errorMessage}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateConfirm">
+        UPDATE image_import
+        SET status = 'CONFIRMED', plan_id = #{planId}
+        <if test="recognizedJson != null">
+            , recognized_json = #{recognizedJson}
+        </if>
+        WHERE id = #{id}
+    </update>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM image_import WHERE id = #{id}
+    </select>
+
+</mapper>

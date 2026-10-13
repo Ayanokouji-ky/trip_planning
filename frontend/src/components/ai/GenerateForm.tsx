@@ -3,6 +3,7 @@ import dayjs, { type Dayjs } from 'dayjs';
 import type { AiGenerateRequest } from '@/types/ai';
 import { TEXT_MODELS, MODEL_TAG_COLORS } from '@/constants/models';
 import { useModelStore } from '@/store/modelStore';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 
 const { TextArea } = Input;
 
@@ -53,6 +54,7 @@ export function buildRequirement(values: GenerateFormValues): string {
 /** AI 行程生成表单 */
 export default function GenerateForm({ submitting, onSubmit }: Props) {
   const [form] = Form.useForm<GenerateFormValues>();
+  const { isMobile } = useBreakpoint();
   const selectedTextModel = useModelStore((s) => s.selectedTextModel);
   const setTextModel = useModelStore((s) => s.setTextModel);
 
@@ -79,6 +81,8 @@ export default function GenerateForm({ submitting, onSubmit }: Props) {
       initialValues={{ days: 2, preferences: ['美食'], model: selectedTextModel }}
       onFinish={handleFinish}
       disabled={submitting}
+      // 窄屏提交按钮固定在视口底部，底部留白避免遮挡最后一个字段
+      style={isMobile ? { paddingBottom: 88 } : undefined}
       // 阻止普通输入框 Enter 隐式提交；Select/TextArea/按钮内的回车放行（Select 用回车确认标签）
       onKeyDown={(e) => {
         const el = e.target as HTMLElement;
@@ -174,9 +178,18 @@ export default function GenerateForm({ submitting, onSubmit }: Props) {
       </Form.Item>
 
       <Form.Item style={{ marginBottom: 0 }}>
-        <Button type="primary" htmlType="submit" size="large" block loading={submitting}>
-          {submitting ? '生成中…' : '生成行程'}
-        </Button>
+        {isMobile ? (
+          // 窄屏：提交按钮固定底部（含刘海屏安全区）
+          <div className="fixed-submit-bar">
+            <Button type="primary" htmlType="submit" size="large" block loading={submitting}>
+              {submitting ? '生成中…' : '生成行程'}
+            </Button>
+          </div>
+        ) : (
+          <Button type="primary" htmlType="submit" size="large" block loading={submitting}>
+            {submitting ? '生成中…' : '生成行程'}
+          </Button>
+        )}
       </Form.Item>
     </Form>
   );
