@@ -3,6 +3,21 @@
 -- MySQL 8.0+, InnoDB, utf8mb4
 -- ============================================================
 
+-- 用户表（Phase 12：登录与归属隔离）
+CREATE TABLE IF NOT EXISTS `user` (
+    `id`         BIGINT       NOT NULL AUTO_INCREMENT,
+    `username`   VARCHAR(50)  NOT NULL COMMENT '用户名（登录名，唯一）',
+    `password`   VARCHAR(100) NOT NULL COMMENT 'BCrypt 加密后的密码哈希',
+    `email`      VARCHAR(100) NULL COMMENT '邮箱',
+    `phone`      VARCHAR(20)  NULL COMMENT '手机号',
+    `avatar`     VARCHAR(255) NULL COMMENT '头像 URL',
+    `role`       VARCHAR(20)  NOT NULL DEFAULT 'USER' COMMENT '角色: USER/ADMIN',
+    `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_username` (`username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
+
 -- 行程主表
 CREATE TABLE IF NOT EXISTS `travel_plan` (
     `id`          BIGINT       NOT NULL AUTO_INCREMENT,
@@ -11,11 +26,14 @@ CREATE TABLE IF NOT EXISTS `travel_plan` (
     `days`        INT          NOT NULL DEFAULT 1 COMMENT '行程天数',
     `status`      VARCHAR(20)  NOT NULL DEFAULT 'DRAFT' COMMENT '行程状态: DRAFT/ACTIVE/ARCHIVED',
     `summary`     TEXT         NULL COMMENT '行程概述',
+    `user_id`     BIGINT       NULL COMMENT '归属用户ID（NULL=存量公共数据）',
+    `is_public`   TINYINT      NOT NULL DEFAULT 0 COMMENT '是否公共行程: 0=私有 1=公共',
     `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     KEY `idx_status` (`status`),
-    KEY `idx_created_at` (`created_at`)
+    KEY `idx_created_at` (`created_at`),
+    KEY `idx_user_plan` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='行程主表';
 
 -- 每日行程
@@ -87,6 +105,7 @@ CREATE TABLE IF NOT EXISTS `ai_generation` (
     `output_json`    MEDIUMTEXT   NULL COMMENT 'AI返回的JSON原始内容',
     `status`         VARCHAR(20)  NOT NULL DEFAULT 'PENDING' COMMENT '生成状态: PENDING/SUCCESS/FAILED',
     `error_message`  TEXT         NULL COMMENT '失败原因',
+    `user_id`        BIGINT       NULL COMMENT '发起生成的用户ID',
     `created_at`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     KEY `idx_plan_id` (`plan_id`),

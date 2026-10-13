@@ -10,7 +10,7 @@ interface PlanState {
   current: PlanDetailResponse | null;
   detailLoading: boolean;
 
-  fetchPlans: () => Promise<void>;
+  fetchPlans: (scope: 'mine' | 'public') => Promise<void>;
   fetchDetail: (id: number) => Promise<void>;
   setCurrent: (detail: PlanDetailResponse) => void;
   clearCurrent: () => void;
@@ -22,10 +22,10 @@ export const usePlanStore = create<PlanState>((set) => ({
   current: null,
   detailLoading: false,
 
-  fetchPlans: async () => {
+  fetchPlans: async (scope: 'mine' | 'public' = 'mine') => {
     set({ listLoading: true });
     try {
-      const plans = await planApi.list();
+      const plans = await planApi.list(scope);
       set({ plans });
     } finally {
       set({ listLoading: false });

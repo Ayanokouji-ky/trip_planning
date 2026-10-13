@@ -245,3 +245,95 @@ AI 输出后，后端需要做以下处理：
 - **用户体验**：AI 生成过程需要加载状态、失败重试、局部修正能力。
 - **数据准确性提示**：门票、开放时间、交通耗时不能保证完全准确，需要明确提示。4, 16
 
+### 10. 迭代优化需求（V2 — 上线反馈）
+
+> 本阶段基于线上用户反馈，对已上线版本进行功能扩展与体验优化。保持现有技术栈（Spring Boot 2.7.18 + React 18 + Vite + TypeScript + 百度地图 GL JS + 火山方舟 Ark responses API）不变，在现有 5 张表（travel_plan / plan_day / plan_node / plan_route / ai_generation）基础上扩展。建议开发顺序：10.1 用户体系 → 10.3 模型选择 → 10.2 图片识图 → 10.5 地图优化 → 10.4 移动端。
+
+#### 10.1 用户登录与行程归属隔离
+
+- 用户注册/登录（用户名 + 密码，BCrypt 加盐哈希），可选绑定邮箱/手机号
+- 未登录用户仅可浏览公共行程，无法生成/编辑/保存行程
+- 新生成的行程默认仅创建者可见；数据库中已存在的存量行程（user_id 为空）统一 UPDATE 标记为 `is_public=1`，作为公共实例所有用户可见
+- 行程列表分两个 Tab：「我的行程」（当前用户私有 + 本人公开）与「公共攻略」（所有 is_public 行程）
+- 用户可将自有行程主动设为公开分享
+- AI 生成记录（ai_generation 表）同步绑定 user_id，便于追溯
+- **数据表变更**：
+    - 新增 `user` 表：id, username, password, email, phone, avatar, role(ADMIN/USER), created_at, updated_at
+    - `travel_plan` 新增字段：`user_id` BIGINT NULL, `is_public` TINYINT DEFAULT 0
+    - 存量数据处理：`UPDATE travel_plan SET is_public=1 WHERE user_id IS NULL`
+- **技术实现**：后端 JWT Token 鉴权 + 拦截器统一校验 + 自定义 `@CurrentUser` 注解注入当前用户；前端登录/注册页 + Token 存 localStorage + Axios 请求拦截器附加 Authorization + 路由守卫；生成/编辑/删除接口必须校验 user_id 与行程归属一致
+
+#### 10.2 图片一图流攻略识别生成
+
+- 生成入口新增「图片导入」Tab，与「文本生成」并列
+- 支持单张/多张图片上传（jpg/png/webp，单张 ≤ 10MB），支持拖拽上传、粘贴上传、图片预览
+- 系统调用多模态识图模型，识别图片中的地点名称、文字描述、日期与天数、交通方式、餐饮/住宿信息
+- 识别结果转为结构化行程节点，复用文本生成同一套 JSON 结构（itinerary → day → nodes）
+- 提供人工确认环节：用户可删除误识别节点、补充缺失信息后再正式生成
+- 多张图片按上传顺序合并为一个完整行程
+- 测试用例：项目 `picTestCase` 目录（case1/case2/case3，共 7 张图片）
+- **数据表变更**：新增 `image_import` 表：id, user_id, plan_id, image_urls(JSON), ocr_result, ai_result, model_name, status, created_at
+- **技术实现**：前端 antd Upload 组件 + 拖拽排序；后端调用火山方舟 Ark `responses` API，input 中使用 `input_image` 类型并传入 base64 data URL（图片内容转为 data:image/jpeg;base64,... 形式）；图片存储本地 `uploads/` 目录，UUID 命名；复用现有 AI JSON 4 步容错提取逻辑；识图模型默认 `doubao-seed-2-1-pro-260915`（详见 10.3）
+
+#### 10.3 可选模型选项
+
+**模型清单**（来源：API.md）：
+- 识图模型：
+    - `doubao-seed-2-1-pro-260915`（默认·质量优先）
+    - `doubao-seed-2-1-turbo-260628`（均衡）
+    - `doubao-seed-2-1-lite-260915`（速度优先）
+- 文本模型：
+    - `deepseek-v4-1-flash-260910`（默认·推荐）
+    - `deepseek-v4-pro-260425`（质量优先）
+    - `glm-5-3-flash-260828`（国产轻量）
+    - `deepseek-v4-pro-ga-260813`（GA 稳定版）
+    - `deepseek-v4-flash-ga-260731`（GA 轻量）
+    - `glm-5-2-260617`（GLM 基础版）
+
+- 生成页面新增「模型选择」下拉框，文本与图片场景分别展示对应模型列表
+- 每个模型选项后附带简短标签（推荐 / 质量优先 / 速度快 / 国产 / GA 稳定）
+- 用户选择记录到 `ai_generation.model_name` 字段，并持久化到 localStorage 作为下次默认选项
+- 所选模型不可用时，降级到默认模型并提示用户
+- **技术实现**：后端 AI 调用层将 model 参数从配置项改为请求参数动态传入，校验模型白名单；前端模型配置常量集中管理（`src/constants/models.ts`），区分文本/识图场景
+
+#### 10.4 窄屏与移动端体验优化
+
+- **生成表单**：窄屏（< 768px）下所有表单项单列堆叠，输入框全宽，提交按钮固定底部
+- **地图区域**：窄屏下高度自适应（min 60vh），增加「全屏」按钮切换沉浸式地图
+- **节点列表**：窄屏下改为底部可折叠 Sheet（抽屉式），点击展开/收起，不挤压地图
+- **拖拽排序**：触摸屏下可用，@dnd-kit 启用 TouchSensor 与 MouseSensor 并行
+- **触摸友好**：所有可点击元素最小 44×44px，字号适配移动端
+- **顶部导航**：窄屏下收为汉堡菜单，展开侧抽屉
+- **行程详情**：窄屏下卡片全屏覆盖式展示，支持左右滑动切换节点
+- **底部 Tab 栏**：窄屏下增加底部导航（地图/列表/详情），方便单手操作
+- **技术实现**：Ant Design Grid 响应式断点（xs/sm/md/lg）+ `Grid.useBreakpoint` Hook；@dnd-kit 将 `PointerSensor` 替换为 `TouchSensor + MouseSensor` 组合，激活距离 8px；CSS 媒体查询 + rem/vw + `safe-area-inset` 适配刘海屏；地图全屏用 Fullscreen API + ResizeObserver；Chrome DevTools 设备模拟器覆盖 iPhone SE/12/14、Pixel、iPad 回归
+
+#### 10.5 地图视觉与交互优化
+
+- **节点标记美化**：
+    - 不同 `place_type` 使用不同颜色与图标：景点(蓝/相机)、餐厅(橙/餐具)、酒店(紫/床)、交通(绿/车)
+    - 节点编号气泡样式圆角化，游览顺序清晰可见
+    - 起点与终点特殊标识（如旗帜、终点旗）
+- **路线样式优化**：
+    - 不同 `transport_mode` 区分线型：步行=虚线、驾车=实线、公交=点划线
+    - 路线渐变色显示方向（起点浅 → 终点深）
+    - 路线 hover 高亮加粗
+- **视野自适应**：生成/拖拽后自动 `fitBounds` 到所有节点范围，无节点时定位到城市中心
+- **节点与列表双向联动**：
+    - 地图节点 hover → 列表对应项高亮滚动
+    - 列表项 hover → 地图对应节点放大跳动
+    - 点击列表项 → 地图平移到该节点并打开详情
+- **地图风格切换**：支持日间/夜间/卫星三种地图样式，记住用户偏好
+- **3D 视角**：启用百度地图 GL 的 3D 倾斜视角（`setTilt`），城市地标建筑 3D 呈现
+- **节点聚合**：zoom out 到一定层级时同区域节点聚合（`MarkerClusterer`），节点 > 50 时启用，避免重叠
+- **加载态**：AI 生成中地图显示骨架屏与进度提示；信息卡片采用玻璃拟态/卡片式设计
+- **技术实现**：百度地图 GL JS 自定义 Overlay（继承 `BMapGL.Overlay`）+ SVG 图标；`setMapStyleV2` 配置样式 JSON；`map.setViewport(points)` 自适应视野；Zustand store 共享 `hoveredNodeId` 实现双向联动；`setTilt(60)` + `setHeading` 3D 视角；WebGL 渲染层性能优化
+
+#### 10.6 验收标准
+
+- **用户体系**：未登录无法生成行程；登录后「我的行程」与「公共攻略」分离可见；存量行程作为公共实例可见
+- **图片识图**：`picTestCase` 3 个 case 均能正确识别主要地点并生成行程；多图合并正常
+- **模型选择**：切换不同模型均能成功生成；异常模型自动降级到默认并提示
+- **移动端**：iPhone SE 以上设备主要操作无横向滚动、地图可全屏、拖拽可用
+- **地图优化**：节点类型颜色区分、路线样式区分、列表与地图双向联动、3D 视角可用、风格切换正常
+

@@ -37,6 +37,8 @@
 | Phase 9 | 拖拽排序与路线重算 | 已完成 | 2026-10-12 | dnd-kit(鼠标+键盘传感器)+乐观更新/回滚+自动重算，API与浏览器冒烟全PASS |
 | Phase 10 | AI 生成表单 UI | 已完成 | 2026-10-12 | 结构化表单+全屏倒计时遮罩+120s超时，真实生成跳转冒烟PASS |
 | Phase 11 | 收尾打磨 | 已完成 | 2026-10-12 | 免责声明全覆盖+ErrorBoundary+JSON/PNG导出+响应式+logback，MVP 全部 11 阶段完成 |
+| Phase 12 | 用户登录与行程归属隔离 | 已完成 | 2026-10-13 | JWT鉴权+User实体+BCrypt+@CurrentUser+双Tab列表+存量标记is_public=1 |
+| Phase 13 | 可选模型选项 | 已完成 | 2026-10-13 | 模型白名单+动态model参数+降级重试+/api/ai/models接口+前端模型选择Select |
 
 ## 状态说明
 
@@ -154,6 +156,34 @@
 - [x] 后端 logback-spring.xml：CONSOLE + 按天滚动 FILE（100MB/30天/1GB）+ ERROR 独立归档（50MB/30天/500MB），UTF-8，logs/ 目录
 - **验证**：build 通过（gzip 465.8KB）；logback XML well-formed 校验 OK（标准结构，下次启动生效，未中断运行中的服务）；浏览器冒烟——JSON/PNG 均真实落盘 Downloads（JSON 9KB 结构完整 plan+2天+10节点+8路线，PNG 539KB），无 oklch 颜色报错（html2canvas-pro），NodeForm/RoutePopup 免责文案存在，ErrorBoundary 触发后 fallback=true/hasHome=true/layoutGone=true、重试恢复标题"成都美食熊猫2日游"，控制台无致命错误；响应式由 antd Grid 媒体查询声明式保证（测试环境固定 1280 视口无法模拟窄屏）；折线弹窗 Phase 8 已验证交互、本次仅新增静态文案；测试下载文件已清理
 
+### Phase 12 — 用户登录与行程归属隔离
+- [x] 后端：User 实体 + UserMapper + migration SQL（user 表 + travel_plan 加 user_id/is_public + 存量 4 条标记 is_public=1）
+- [x] 后端：JwtService（HS256，7天有效期）+ JwtInterceptor（可选鉴权 GET /api/plans*，强制鉴权其余 /api/**）
+- [x] 后端：@CurrentUser 注解 + CurrentUserArgumentResolver + UserContext ThreadLocal
+- [x] 后端：AuthController（register/login/me）+ UserServiceImpl（BCrypt 加盐哈希）
+- [x] 后端：PlanService scope 查询（mine=本人私有+本人公开 / public=所有 is_public）+ 归属校验（非本人 non-public 403）
+- [x] 后端：AiGenerationMapper.updateUserId（写入发起生成的用户ID）
+- [x] 前端：authStore（persist localStorage）+ authApi（register/login/me）+ ProtectedRoute（/generate /plans/:id/edit 需登录）
+- [x] 前端：LoginPage + RegisterPage + UserMenu（Header 右上角）
+- [x] 前端：client.ts 请求拦截器注入 Authorization + 响应拦截器 401 跳登录
+- [x] 前端：PlanListPage 双 Tab（我的行程 / 公共攻略）+ 归属标签
+- **验证**：mvnw clean compile BUILD SUCCESS；tsc --noEmit 0 错误；端到端——注册→登录→me→mine(空)→public(4条)→401 拦截全通过
+
+### Phase 13 — 可选模型选项
+- [x] 后端：ModelConstants 常量类（文本 6 + 识图 3 模型白名单）+ ModelInfo DTO
+- [x] 后端：AiGenerateRequest 新增 model 字段（可选，缺省默认文本模型）
+- [x] 后端：AiGenerateResult 新增 degraded + modelUsed 字段
+- [x] 后端：AiService 接口新增 generateItinerary(requirement, model) 重载
+- [x] 后端：ArkAiServiceImpl 改造——model 参数传入、白名单校验（非白名单 400）、RestClientException 降级重试到默认模型
+- [x] 后端：AiGenerateResponse DTO（plan + degraded + modelUsed）+ AiGenerateService 返回类型改造
+- [x] 后端：AiController 新增 GET /api/ai/models?type=text|image 接口 + JwtInterceptor 放行
+- [x] 前端：constants/models.ts（TEXT_MODELS / IMAGE_MODELS / MODEL_TAG_COLORS）+ modelStore.ts（persist localStorage）
+- [x] 前端：types/ai.ts 新增 AiGenerateResponse + ModelInfo 类型 + AiGenerateRequest 加 model 字段
+- [x] 前端：aiApi.ts 新增 getModels 方法 + generate 返回类型改为 AiGenerateResponse
+- [x] 前端：GenerateForm 新增「AI 模型」Select（选项附 Tag 标签 + tooltip 说明）+ 持久化到 store
+- [x] 前端：GeneratePage 处理 degraded Toast 提示
+- **验证**：mvnw clean compile BUILD SUCCESS；tsc --noEmit 0 错误；端到端——GET /api/ai/models?type=text 返回 6 模型 / type=image 返回 3 模型；白名单外 model 返回 400"不支持的模型"；默认模型生成 degraded=false；deepseek-v4-pro-260425 不可用自动降级 degraded=true modelUsed=deepseek-v4-1-flash-260910 planId=12
+
 ## 变更日志
 
 | 日期 | 操作人 | 变更内容 |
@@ -173,3 +203,5 @@
 | 2026-10-12 | - | Phase 10 完成：GenerateForm 结构化字段拼接 requirement + AiLoadingOverlay 全屏倒计时(Xs/120s/四阶段) + 成功跳转/失败保留重试；修复 Enter 误提交、AI 超时 60s→120s(per-request config)、InputNumber addonAfter 废弃三处问题；真实生成跳转冒烟 PASS，测试行程已清理 |
 | 2026-10-12 | - | Phase 11 完成（MVP 收官）：免责声明三处补强(RoutePopup/NodeForm) + ErrorBoundary(class+Result降级+DEV测试钩子) + utils/exportPlan(JSON Blob + html2canvas-pro PNG，onclone 去除操作UI) + 详情页导出下拉(trigger click 修复) + 响应式(两列堆叠/地图360/Header padding) + logback-spring.xml(滚动+ERROR独立文件)；JSON/PNG 真实下载与错误边界实证 PASS，测试文件已清理 |
 | 2026-10-12 | - | ECS 部署包：application-prod.yml(7个环境变量占位外置 DB/AK/Key) + Docker Compose(backend temurin8-jre + frontend nginx:alpine，80入口/8080仅内网/日志卷/轮转) + nginx(SPA回退+/api反代120s超时) + .env.example + build-package.ps1(一键构建打包)；JDK8(Adoptium 8.0.504)构建 fat jar 23.6MB + Vite dist，产物 dist-packages/trip-planner-deploy.tar.gz 21.7MB；jar 清单与占位符离线校验通过 |
+| 2026-10-13 | - | Phase 12 完成：User/JwtService/JwtInterceptor/@CurrentUser/AuthController/BCrypt + PlanService scope 查询 + 存量标记 is_public=1；前端 authStore/LoginPage/RegisterPage/UserMenu/client 拦截器/PlanListPage 双 Tab；端到端验证全通过 |
+| 2026-10-13 | - | Phase 13 完成：ModelConstants 白名单(文本6+识图3) + AiGenerateRequest.model + ArkAiServiceImpl 动态 model + RestClientException 降级重试 + AiGenerateResponse(plan+degraded+modelUsed) + GET /api/ai/models + JwtInterceptor 放行；前端 constants/models.ts + modelStore + GenerateForm 模型 Select + degraded Toast；端到端验证全通过 |

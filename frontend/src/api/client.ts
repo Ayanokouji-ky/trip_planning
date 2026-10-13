@@ -7,7 +7,24 @@ const instance = axios.create({
   timeout: 60000,
 });
 
-// 响应拦截器：解包 ApiResult，统一错误提示
+// 请求拦截器：从 zustand persist 的 localStorage 读取 token，注入 Authorization
+instance.interceptors.request.use((config) => {
+  const raw = localStorage.getItem('auth-storage');
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as { state?: { token?: string | null } | null };
+      const token = parsed?.state?.token;
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch {
+      // ignore malformed storage
+    }
+  }
+  return config;
+});
+
+// 响应拦截器：解包 ApiResult，统一错误提示；401 清除登录态并跳 /login
 instance.interceptors.response.use(
   (response) => {
     const body = response.data as ApiResult<unknown>;
@@ -22,6 +39,16 @@ instance.interceptors.response.use(
     return response.data;
   },
   (error: AxiosError<ApiResult<unknown>>) => {
+    const status = error.response?.status;
+    if (status === 401) {
+      // 清除登录态
+      localStorage.removeItem('auth-storage');
+      // 在 /login 页面不跳转，避免循环（登录失败时仅提示错误）
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+        return Promise.reject(new Error('未登录或登录已过期'));
+      }
+    }
     const msg = error.response?.data?.message || `网络错误: ${error.message}`;
     message.error(msg);
     return Promise.reject(new Error(msg));

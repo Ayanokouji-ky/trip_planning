@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Card, Typography } from 'antd';
+import { Card, Typography, message } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { aiApi } from '@/api/aiApi';
 import { usePlanStore } from '@/store/planStore';
@@ -40,9 +40,12 @@ export default function GeneratePage() {
     setSubmitting(true);
     startTimer();
     try {
-      const detail = await aiApi.generate(payload);
-      setCurrent(detail);
-      navigate(`/plans/${detail.plan.id}`);
+      const { plan, degraded, modelUsed } = await aiApi.generate(payload);
+      setCurrent(plan);
+      if (degraded) {
+        message.warning(`所选模型不可用，已降级为 ${modelUsed}`);
+      }
+      navigate(`/plans/${plan.plan.id}`);
     } catch {
       // 拦截器已统一 message 提示；表单值保留，用户可直接重试
     } finally {

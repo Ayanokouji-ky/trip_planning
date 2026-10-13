@@ -1,4 +1,4 @@
-*******AI 调用模块******
+###AI 调用模块
 1.API KEY：ark-cad8d48c-f35b-4dd9-82df-35cc174af75d-55b4c
 
 curl --location 'https://ark.cn-beijing.volces.com/api/v3/responses' \
@@ -25,7 +25,10 @@ curl --location 'https://ark.cn-beijing.volces.com/api/v3/responses' \
         }
     ]
 }'
-********AI 调用模块结束*****
+
+
+###可选模型id：doubao-seed-2-1-pro-260915
+
 
 ********地图API 调用模块*******
 百度地图服务端AK：SQWFoL8hiHpxV6ULOWTAmB7P9qJ5vfpL

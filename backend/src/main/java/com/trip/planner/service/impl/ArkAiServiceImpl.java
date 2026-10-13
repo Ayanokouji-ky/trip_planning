@@ -4,11 +4,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.trip.planner.constant.ModelConstants;
 import com.trip.planner.config.AppProperties;
 import com.trip.planner.dto.ai.AiGenerateResult;
 import com.trip.planner.dto.ai.AiItineraryDto;
 import com.trip.planner.entity.AiGeneration;
 import com.trip.planner.exception.AiGenerationException;
+import com.trip.planner.exception.BusinessException;
 import com.trip.planner.mapper.AiGenerationMapper;
 import com.trip.planner.service.AiService;
 import com.trip.planner.util.JsonExtractor;
@@ -37,26 +39,60 @@ public class ArkAiServiceImpl implements AiService {
 
     @Override
     public AiGenerateResult generateItinerary(String userRequirement) {
+        return generateItinerary(userRequirement, null);
+    }
+
+    @Override
+    public AiGenerateResult generateItinerary(String userRequirement, String model) {
         AppProperties.Ai ai = appProperties.getAi();
         String prompt = PromptBuilder.buildSystemPrompt() + "\n\n" + PromptBuilder.buildUserPrompt(userRequirement);
+
+        // 解析实际使用的模型：空 → 默认；非白名单 → 400
+        boolean degraded = false;
+        String actualModel = model;
+        if (actualModel == null || actualModel.trim().isEmpty()) {
+            actualModel = ModelConstants.DEFAULT_TEXT_MODEL;
+        } else if (!ModelConstants.isValidModel(actualModel)) {
+            throw new BusinessException(400, "不支持的模型: " + actualModel);
+        }
 
         // 写入 PENDING 记录
         AiGeneration record = new AiGeneration();
         record.setInputType("TEXT");
         record.setInputContent(userRequirement);
-        record.setModelName(ai.getModel());
+        record.setModelName(actualModel);
         record.setPrompt(prompt);
         record.setStatus("PENDING");
         aiGenerationMapper.insert(record);
 
         try {
-            String rawOutput = callArkApi(ai, prompt);
+            String rawOutput;
+            try {
+                rawOutput = callArkApi(ai, actualModel, prompt);
+            } catch (org.springframework.web.client.RestClientException e) {
+                // 模型可能不可用（4xx/超时/5xx），降级到默认模型重试
+                if (!actualModel.equals(ModelConstants.DEFAULT_TEXT_MODEL)) {
+                    log.warn("Model {} call failed ({}), degrading to default {}",
+                            actualModel, e.getMessage(), ModelConstants.DEFAULT_TEXT_MODEL);
+                    degraded = true;
+                    actualModel = ModelConstants.DEFAULT_TEXT_MODEL;
+                    // DB 记录保留原始请求模型名用于审计；AiGenerateResult.modelUsed 反映实际使用的模型
+                    rawOutput = callArkApi(ai, actualModel, prompt);
+                } else {
+                    throw e;
+                }
+            }
             record.setOutputJson(rawOutput);
             AiItineraryDto itinerary = JsonExtractor.extract(rawOutput, AiItineraryDto.class);
             validate(itinerary);
             aiGenerationMapper.updateStatus(record.getId(), "SUCCESS", null, null);
-            log.info("AI generation SUCCESS, recordId={}", record.getId());
-            return new AiGenerateResult(record.getId(), itinerary);
+            log.info("AI generation SUCCESS, recordId={}, model={}, degraded={}",
+                    record.getId(), actualModel, degraded);
+            return new AiGenerateResult(record.getId(), itinerary, degraded, actualModel);
+        } catch (org.springframework.web.client.RestClientException e) {
+            log.error("AI generation FAILED (network), recordId={}", record.getId(), e);
+            aiGenerationMapper.updateStatus(record.getId(), "FAILED", e.getMessage(), null);
+            throw new AiGenerationException("AI 调用失败（网络错误）: " + e.getMessage(), e);
         } catch (Exception e) {
             log.error("AI generation FAILED, recordId={}", record.getId(), e);
             aiGenerationMapper.updateStatus(record.getId(), "FAILED", e.getMessage(), null);
@@ -66,9 +102,9 @@ public class ArkAiServiceImpl implements AiService {
         }
     }
 
-    private String callArkApi(AppProperties.Ai ai, String prompt) {
+    private String callArkApi(AppProperties.Ai ai, String model, String prompt) {
         ObjectNode body = MAPPER.createObjectNode();
-        body.put("model", ai.getModel());
+        body.put("model", model);
         body.put("stream", false);
 
         ArrayNode input = body.putArray("input");
@@ -83,7 +119,7 @@ public class ArkAiServiceImpl implements AiService {
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(ai.getApiKey());
 
-        log.info("Calling Ark API, model={}", ai.getModel());
+        log.info("Calling Ark API, model={}", model);
         JsonNode root = aiRestTemplate.postForObject(
                 ai.getEndpoint(), new HttpEntity<>(body, headers), JsonNode.class);
         if (root == null) {
@@ -97,32 +133,30 @@ public class ArkAiServiceImpl implements AiService {
      * 从 responses API 响应中提取文本输出，兼容 output_text / content 数组两种结构。
      */
     private String extractTextFromResponse(JsonNode root) {
-        {
-            JsonNode output = root.get("output");
-            if (output != null && output.isArray()) {
-                StringBuilder sb = new StringBuilder();
-                for (JsonNode item : output) {
-                    JsonNode content = item.get("content");
-                    if (content != null && content.isArray()) {
-                        for (JsonNode part : content) {
-                            JsonNode text = part.get("text");
-                            if (text != null && text.isTextual()) {
-                                sb.append(text.asText());
-                            }
+        JsonNode output = root.get("output");
+        if (output != null && output.isArray()) {
+            StringBuilder sb = new StringBuilder();
+            for (JsonNode item : output) {
+                JsonNode content = item.get("content");
+                if (content != null && content.isArray()) {
+                    for (JsonNode part : content) {
+                        JsonNode text = part.get("text");
+                        if (text != null && text.isTextual()) {
+                            sb.append(text.asText());
                         }
                     }
                 }
-                if (sb.length() > 0) {
-                    return sb.toString();
-                }
             }
-            // 兜底：尝试 choices/message 结构
-            JsonNode choices = root.get("choices");
-            if (choices != null && choices.isArray() && choices.size() > 0) {
-                JsonNode message = choices.get(0).get("message");
-                if (message != null && message.get("content") != null) {
-                    return message.get("content").asText();
-                }
+            if (sb.length() > 0) {
+                return sb.toString();
+            }
+        }
+        // 兜底：尝试 choices/message 结构
+        JsonNode choices = root.get("choices");
+        if (choices != null && choices.isArray() && choices.size() > 0) {
+            JsonNode message = choices.get(0).get("message");
+            if (message != null && message.get("content") != null) {
+                return message.get("content").asText();
             }
         }
         throw new AiGenerationException("无法解析 Ark API 响应结构");

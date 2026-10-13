@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trip.planner.mapper.UserMapper">
+
+    <resultMap id="BaseResultMap" type="com.trip.planner.entity.User">
+        <id column="id" property="id"/>
+        <result column="username" property="username"/>
+        <result column="password" property="password"/>
+        <result column="email" property="email"/>
+        <result column="phone" property="phone"/>
+        <result column="avatar" property="avatar"/>
+        <result column="role" property="role"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, username, password, email, phone, avatar, role, created_at, updated_at
+    </sql>
+
+    <insert id="insert" parameterType="com.trip.planner.entity.User" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO user (username, password, email, phone, avatar, role)
+        VALUES (#{username}, #{password}, #{email}, #{phone}, #{avatar}, #{role})
+    </insert>
+
+    <select id="findByUsername" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM user
+        WHERE username = #{username}
+    </select>
+
+    <select id="findById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM user
+        WHERE id = #{id}
+    </select>
+
+</mapper>

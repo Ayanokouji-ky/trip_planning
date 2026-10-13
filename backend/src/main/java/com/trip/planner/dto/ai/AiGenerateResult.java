@@ -16,4 +16,8 @@ public class AiGenerateResult implements Serializable {
 
     private Long generationId;
     private AiItineraryDto itinerary;
+    /** 所选模型不可用时是否降级到默认模型 */
+    private boolean degraded;
+    /** 实际使用的模型 ID */
+    private String modelUsed;
 }

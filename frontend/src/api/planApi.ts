@@ -10,7 +10,8 @@ import type {
 } from '@/types/plan';
 
 export const planApi = {
-  list: () => client.get<TravelPlan[]>('/plans'),
+  list: (scope: 'mine' | 'public' = 'mine') =>
+    client.get<TravelPlan[]>('/plans', { scope }),
 
   detail: (id: number) => client.get<PlanDetailResponse>(`/plans/${id}`),
 

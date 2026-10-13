@@ -13,16 +13,17 @@
         <result column="output_json" property="outputJson"/>
         <result column="status" property="status"/>
         <result column="error_message" property="errorMessage"/>
+        <result column="user_id" property="userId"/>
         <result column="created_at" property="createdAt"/>
     </resultMap>
 
     <sql id="Base_Column_List">
-        id, plan_id, input_type, input_content, model_name, prompt, output_json, status, error_message, created_at
+        id, plan_id, input_type, input_content, model_name, prompt, output_json, status, error_message, user_id, created_at
     </sql>
 
     <insert id="insert" parameterType="com.trip.planner.entity.AiGeneration" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO ai_generation (plan_id, input_type, input_content, model_name, prompt, output_json, status, error_message)
-        VALUES (#{planId}, #{inputType}, #{inputContent}, #{modelName}, #{prompt}, #{outputJson}, #{status}, #{errorMessage})
+        INSERT INTO ai_generation (plan_id, input_type, input_content, model_name, prompt, output_json, status, error_message, user_id)
+        VALUES (#{planId}, #{inputType}, #{inputContent}, #{modelName}, #{prompt}, #{outputJson}, #{status}, #{errorMessage}, #{userId})
     </insert>
 
     <update id="updateStatus">
@@ -31,6 +32,12 @@
         <if test="planId != null">
             , plan_id = #{planId}
         </if>
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateUserId">
+        UPDATE ai_generation
+        SET user_id = #{userId}
         WHERE id = #{id}
     </update>
 

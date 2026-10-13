@@ -11,6 +11,7 @@ public class AppProperties {
 
     private Baidu baidu = new Baidu();
     private Ai ai = new Ai();
+    private Jwt jwt = new Jwt();
 
     @Data
     public static class Baidu {
@@ -25,5 +26,13 @@ public class AppProperties {
         private String endpoint;
         private String model;
         private int timeoutMs = 60000;
+    }
+
+    @Data
+    public static class Jwt {
+        /** HS256 签名密钥（要求 >= 32 字节） */
+        private String secret;
+        /** Token 有效期（毫秒），默认 7 天 */
+        private long expirationMs = 604800000L;
     }
 }

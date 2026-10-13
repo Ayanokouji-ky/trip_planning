@@ -3,6 +3,7 @@ import { HomeOutlined, UnorderedListOutlined, RobotOutlined } from '@ant-design/
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useUiStore } from '@/store/uiStore';
+import UserMenu from '@/components/auth/UserMenu';
 
 const { Header, Sider, Content, Footer } = Layout;
 
@@ -71,12 +72,17 @@ export default function AppLayout() {
             fontSize: screens.md ? 16 : 14,
             fontWeight: 500,
             boxShadow: '0 1px 4px rgba(0,21,41,.08)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
-            textOverflow: 'ellipsis',
           }}
         >
-          AI 旅游行程规划与地图可视化平台
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            AI 旅游行程规划与地图可视化平台
+          </span>
+          <UserMenu />
         </Header>
         <Content style={{ padding: screens.md ? 24 : 12, minHeight: 360 }}>
           <Outlet />

@@ -10,6 +10,7 @@ import com.trip.planner.entity.PlanDay;
 import com.trip.planner.entity.PlanNode;
 import com.trip.planner.entity.PlanRoute;
 import com.trip.planner.entity.TravelPlan;
+import com.trip.planner.exception.BusinessException;
 import com.trip.planner.exception.ResourceNotFoundException;
 import com.trip.planner.mapper.PlanDayMapper;
 import com.trip.planner.mapper.PlanNodeMapper;
@@ -35,6 +36,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class PlanServiceImpl implements PlanService {
 
+    private static final int IS_PRIVATE = 0;
+    private static final int IS_PUBLIC = 1;
+
     private final TravelPlanMapper travelPlanMapper;
     private final PlanDayMapper planDayMapper;
     private final PlanNodeMapper planNodeMapper;
@@ -43,13 +47,27 @@ public class PlanServiceImpl implements PlanService {
     private final RouteService routeService;
 
     @Override
-    public List<TravelPlan> list() {
-        return travelPlanMapper.selectAll();
+    public List<TravelPlan> list(String scope, Long userId) {
+        if (scope == null) {
+            scope = "mine";
+        }
+        switch (scope) {
+            case "public":
+                return travelPlanMapper.selectPublic();
+            case "mine":
+                if (userId == null) {
+                    // 未登录调用 mine 视为空结果
+                    return new ArrayList<>();
+                }
+                return travelPlanMapper.selectByUserId(userId);
+            default:
+                throw new BusinessException("不支持的 scope 值，仅支持 mine / public");
+        }
     }
 
     @Override
-    public PlanDetailResponse getDetail(Long id) {
-        TravelPlan plan = travelPlanMapper.selectById(id);
+    public PlanDetailResponse getDetail(Long id, Long userId) {
+        TravelPlan plan = travelPlanMapper.selectByIdAccessible(id, userId);
         if (plan == null) {
             throw new ResourceNotFoundException("TravelPlan", id);
         }
@@ -63,13 +81,16 @@ public class PlanServiceImpl implements PlanService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public TravelPlan create(PlanSaveRequest request) {
+    public TravelPlan create(PlanSaveRequest request, Long userId) {
         TravelPlan plan = new TravelPlan();
         plan.setTitle(request.getTitle());
         plan.setCity(request.getCity());
         plan.setDays(request.getDays());
         plan.setStatus("DRAFT");
         plan.setSummary(request.getSummary());
+        plan.setUserId(userId);
+        // 普通新建默认私有
+        plan.setIsPublic(IS_PRIVATE);
         travelPlanMapper.insert(plan);
 
         List<PlanDay> days = new ArrayList<>();
@@ -80,13 +101,14 @@ public class PlanServiceImpl implements PlanService {
             days.add(day);
         }
         planDayMapper.batchInsert(days);
-        log.info("Created plan id={}, title={}, days={}", plan.getId(), plan.getTitle(), request.getDays());
+        log.info("Created plan id={}, title={}, days={}, userId={}",
+                plan.getId(), plan.getTitle(), request.getDays(), userId);
         return plan;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public TravelPlan createFromAi(AiItineraryDto itinerary, String title) {
+    public TravelPlan createFromAi(AiItineraryDto itinerary, String title, Long userId) {
         // 1. 主表
         TravelPlan plan = new TravelPlan();
         plan.setTitle(title != null && !title.trim().isEmpty()
@@ -96,6 +118,8 @@ public class PlanServiceImpl implements PlanService {
         plan.setDays(itinerary.getDays());
         plan.setStatus("AI_GENERATED");
         plan.setSummary(itinerary.getSummary());
+        plan.setUserId(userId);
+        plan.setIsPublic(IS_PRIVATE);
         travelPlanMapper.insert(plan);
 
         // 2. 逐天 + 逐节点（geocode 单点失败不中断，50ms 限流）
@@ -147,7 +171,8 @@ public class PlanServiceImpl implements PlanService {
         // 3. 路线（同事务内复用 RouteService，单点失败不中断）
         routeService.recalculate(plan.getId());
 
-        log.info("Created plan from AI: id={}, days={}, nodes={}", plan.getId(), itinerary.getDays(), nodeCount);
+        log.info("Created plan from AI: id={}, days={}, nodes={}, userId={}",
+                plan.getId(), itinerary.getDays(), nodeCount, userId);
         return plan;
     }
 
@@ -164,10 +189,13 @@ public class PlanServiceImpl implements PlanService {
     }
 
     @Override
-    public TravelPlan update(Long id, PlanSaveRequest request) {
+    public TravelPlan update(Long id, PlanSaveRequest request, Long userId) {
         TravelPlan existing = travelPlanMapper.selectById(id);
         if (existing == null) {
             throw new ResourceNotFoundException("TravelPlan", id);
+        }
+        if (existing.getUserId() == null || !existing.getUserId().equals(userId)) {
+            throw new BusinessException(403, "无权操作他人行程");
         }
         TravelPlan plan = new TravelPlan();
         plan.setId(id);
@@ -179,20 +207,24 @@ public class PlanServiceImpl implements PlanService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void delete(Long id) {
+    public void delete(Long id, Long userId) {
         TravelPlan existing = travelPlanMapper.selectById(id);
         if (existing == null) {
             throw new ResourceNotFoundException("TravelPlan", id);
         }
+        if (existing.getUserId() == null || !existing.getUserId().equals(userId)) {
+            throw new BusinessException(403, "无权操作他人行程");
+        }
         // 外键 ON DELETE CASCADE 自动级联删除 days/nodes/routes
         travelPlanMapper.deleteById(id);
-        log.info("Deleted plan id={}", id);
+        log.info("Deleted plan id={}, userId={}", id, userId);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public TravelPlan copy(Long id) {
-        TravelPlan source = travelPlanMapper.selectById(id);
+    public TravelPlan copy(Long id, Long userId) {
+        // 这里仅校验可访问性（公共行程也允许复制），不要求所有权
+        TravelPlan source = travelPlanMapper.selectByIdAccessible(id, userId);
         if (source == null) {
             throw new ResourceNotFoundException("TravelPlan", id);
         }
@@ -200,13 +232,15 @@ public class PlanServiceImpl implements PlanService {
         List<PlanNode> nodes = planNodeMapper.selectByPlanId(id);
         List<PlanRoute> routes = planRouteMapper.selectByPlanId(id);
 
-        // 1. 复制主表
+        // 1. 复制主表，新行程归属当前用户
         TravelPlan newPlan = new TravelPlan();
         newPlan.setTitle(source.getTitle() + "（副本）");
         newPlan.setCity(source.getCity());
         newPlan.setDays(source.getDays());
         newPlan.setStatus("DRAFT");
         newPlan.setSummary(source.getSummary());
+        newPlan.setUserId(userId);
+        newPlan.setIsPublic(IS_PRIVATE);
         travelPlanMapper.insert(newPlan);
         Long newPlanId = newPlan.getId();
 
@@ -260,8 +294,19 @@ public class PlanServiceImpl implements PlanService {
             }
         }
 
-        log.info("Copied plan id={} -> newId={}, days={}, nodes={}, routes={}",
-                id, newPlanId, days.size(), nodes.size(), routes.size());
+        log.info("Copied plan id={} -> newId={}, days={}, nodes={}, routes={}, userId={}",
+                id, newPlanId, days.size(), nodes.size(), routes.size(), userId);
         return travelPlanMapper.selectById(newPlanId);
+    }
+
+    @Override
+    public void requireOwnership(Long planId, Long userId) {
+        TravelPlan existing = travelPlanMapper.selectById(planId);
+        if (existing == null) {
+            throw new ResourceNotFoundException("TravelPlan", planId);
+        }
+        if (existing.getUserId() == null || !existing.getUserId().equals(userId)) {
+            throw new BusinessException(403, "无权操作他人行程");
+        }
     }
 }

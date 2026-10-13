@@ -53,3 +53,7 @@ app:
     endpoint: https://ark.cn-beijing.volces.com/api/v3/responses
     model: deepseek-v4-1-flash-260910
     timeout-ms: 60000
+  jwt:
+    # HS256 要求密钥长度 >= 32 字节；本字符串（UTF-8 编码）超过 32 字节
+    secret: trip-planner-jwt-secret-key-phase12-please-change-in-production-2026
+    expiration-ms: 604800000

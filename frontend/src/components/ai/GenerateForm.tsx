@@ -1,6 +1,8 @@
-import { Button, DatePicker, Form, Input, InputNumber, Select, Space } from 'antd';
+import { Button, DatePicker, Form, Input, InputNumber, Select, Space, Tag } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import type { AiGenerateRequest } from '@/types/ai';
+import { TEXT_MODELS, MODEL_TAG_COLORS } from '@/constants/models';
+import { useModelStore } from '@/store/modelStore';
 
 const { TextArea } = Input;
 
@@ -12,6 +14,7 @@ export interface GenerateFormValues {
   budgetLevel?: string;
   preferences?: string[];
   extraRequirement?: string;
+  model: string;
 }
 
 interface Props {
@@ -50,6 +53,8 @@ export function buildRequirement(values: GenerateFormValues): string {
 /** AI 行程生成表单 */
 export default function GenerateForm({ submitting, onSubmit }: Props) {
   const [form] = Form.useForm<GenerateFormValues>();
+  const selectedTextModel = useModelStore((s) => s.selectedTextModel);
+  const setTextModel = useModelStore((s) => s.setTextModel);
 
   const handleFinish = (raw: GenerateFormValues) => {
     // mode="tags" 的 Select 提交值为数组，归一化为单个城市名
@@ -57,9 +62,12 @@ export default function GenerateForm({ submitting, onSubmit }: Props) {
       ? String(raw.destination[0] ?? '')
       : raw.destination;
     const values: GenerateFormValues = { ...raw, destination: dest };
+    // 持久化模型选择到 store
+    setTextModel(values.model);
     const payload: AiGenerateRequest = {
       requirement: buildRequirement(values),
       title: `${dest}${values.days}日游`,
+      model: values.model,
     };
     onSubmit(values, payload);
   };
@@ -68,7 +76,7 @@ export default function GenerateForm({ submitting, onSubmit }: Props) {
     <Form<GenerateFormValues>
       form={form}
       layout="vertical"
-      initialValues={{ days: 2, preferences: ['美食'] }}
+      initialValues={{ days: 2, preferences: ['美食'], model: selectedTextModel }}
       onFinish={handleFinish}
       disabled={submitting}
       // 阻止普通输入框 Enter 隐式提交；Select/TextArea/按钮内的回车放行（Select 用回车确认标签）
@@ -140,6 +148,28 @@ export default function GenerateForm({ submitting, onSubmit }: Props) {
           maxLength={500}
           showCount
           placeholder="如：必看大熊猫、不吃辣、需要安排亲子酒店、行程节奏轻松一些…"
+        />
+      </Form.Item>
+
+      <Form.Item
+        name="model"
+        label="AI 模型"
+        tooltip="选择用于生成行程的 AI 模型。所选模型不可用时将自动降级为默认模型。"
+      >
+        <Select
+          options={TEXT_MODELS.map((m) => ({
+            value: m.id,
+            label: (
+              <Space size="small">
+                <span>{m.label}</span>
+                <Tag color={MODEL_TAG_COLORS[m.tag] ?? 'default'} style={{ margin: 0 }}>
+                  {m.tag}
+                </Tag>
+              </Space>
+            ),
+            description: m.description,
+          }))}
+          onChange={(value: string) => setTextModel(value)}
         />
       </Form.Item>
 
