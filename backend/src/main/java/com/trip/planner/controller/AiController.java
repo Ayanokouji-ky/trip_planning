@@ -57,4 +57,15 @@ public class AiController {
                 : ModelConstants.TEXT_MODELS;
         return ApiResult.ok(models);
     }
+
+    /**
+     * Phase 18：节点 AI 智能填充——只输入地点名称，AI 生成其余表单字段（全部可编辑）。
+     */
+    @PostMapping("/enrich-node")
+    public ApiResult<com.trip.planner.dto.response.NodeEnrichResponse> enrichNode(
+            @Validated @RequestBody com.trip.planner.dto.request.NodeEnrichRequest request,
+            @CurrentUser UserContext user) {
+        // 仅校验登录态，AI 填充本身不依赖 userId
+        return ApiResult.ok(aiService.enrichNode(request.getName(), request.getCity(), request.getModel()));
+    }
 }

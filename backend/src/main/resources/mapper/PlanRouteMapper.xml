@@ -12,22 +12,23 @@
         <result column="distance" property="distance"/>
         <result column="duration" property="duration"/>
         <result column="cost" property="cost"/>
+        <result column="suggestion" property="suggestion"/>
     </resultMap>
 
     <sql id="Base_Column_List">
-        id, plan_id, from_node_id, to_node_id, transport_mode, distance, duration, cost
+        id, plan_id, from_node_id, to_node_id, transport_mode, distance, duration, cost, suggestion
     </sql>
 
     <insert id="insert" parameterType="com.trip.planner.entity.PlanRoute" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO plan_route (plan_id, from_node_id, to_node_id, transport_mode, distance, duration, cost)
-        VALUES (#{planId}, #{fromNodeId}, #{toNodeId}, #{transportMode}, #{distance}, #{duration}, #{cost})
+        INSERT INTO plan_route (plan_id, from_node_id, to_node_id, transport_mode, distance, duration, cost, suggestion)
+        VALUES (#{planId}, #{fromNodeId}, #{toNodeId}, #{transportMode}, #{distance}, #{duration}, #{cost}, #{suggestion})
     </insert>
 
     <insert id="batchInsert" parameterType="java.util.List">
-        INSERT INTO plan_route (plan_id, from_node_id, to_node_id, transport_mode, distance, duration, cost) VALUES
+        INSERT INTO plan_route (plan_id, from_node_id, to_node_id, transport_mode, distance, duration, cost, suggestion) VALUES
         <foreach collection="list" item="item" separator=",">
             (#{item.planId}, #{item.fromNodeId}, #{item.toNodeId}, #{item.transportMode},
-             #{item.distance}, #{item.duration}, #{item.cost})
+             #{item.distance}, #{item.duration}, #{item.cost}, #{item.suggestion})
         </foreach>
     </insert>
 
@@ -38,6 +39,7 @@
             <if test="distance != null">distance = #{distance},</if>
             <if test="duration != null">duration = #{duration},</if>
             <if test="cost != null">cost = #{cost},</if>
+            <if test="suggestion != null">suggestion = #{suggestion},</if>
         </set>
         WHERE id = #{id}
     </update>

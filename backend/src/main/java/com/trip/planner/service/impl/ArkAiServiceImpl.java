@@ -145,7 +145,7 @@ public class ArkAiServiceImpl implements AiService {
 
             String rawOutput;
             try {
-                rawOutput = callArkApiWithContent(ai, actualModel, content, true);
+                rawOutput = callArkApiWithContent(ai, actualModel, content);
             } catch (org.springframework.web.client.RestClientException e) {
                 // 识图模型可能不可用，降级到默认识图模型重试
                 if (!actualModel.equals(ModelConstants.DEFAULT_IMAGE_MODEL)) {
@@ -153,7 +153,7 @@ public class ArkAiServiceImpl implements AiService {
                             actualModel, e.getMessage(), ModelConstants.DEFAULT_IMAGE_MODEL);
                     degraded = true;
                     actualModel = ModelConstants.DEFAULT_IMAGE_MODEL;
-                    rawOutput = callArkApiWithContent(ai, actualModel, content, true);
+                    rawOutput = callArkApiWithContent(ai, actualModel, content);
                 } else {
                     throw e;
                 }
@@ -178,6 +178,77 @@ public class ArkAiServiceImpl implements AiService {
         }
     }
 
+    /**
+     * Phase 18：节点 AI 智能填充。thinking disabled + 紧凑 JSON + 截断修复复用 JsonExtractor。
+     */
+    @Override
+    public com.trip.planner.dto.response.NodeEnrichResponse enrichNode(String name, String city, String model) {
+        AppProperties.Ai ai = appProperties.getAi();
+        String prompt = PromptBuilder.buildNodeEnrichPrompt(name, city);
+
+        // 解析实际使用的模型：空 → 默认文本模型；非文本白名单 → 400
+        boolean degraded = false;
+        String actualModel = model;
+        if (actualModel == null || actualModel.trim().isEmpty()) {
+            actualModel = ModelConstants.DEFAULT_TEXT_MODEL;
+        } else if (!ModelConstants.isValidTextModel(actualModel)) {
+            throw new BusinessException(400, "不支持的模型: " + actualModel);
+        }
+
+        // 写入 PENDING 记录（input_content 统一加 [NODE_ENRICH] 前缀便于区分场景）
+        AiGeneration record = new AiGeneration();
+        record.setInputType("TEXT");
+        record.setInputContent("[NODE_ENRICH] " + name);
+        record.setModelName(actualModel);
+        record.setPrompt(prompt);
+        record.setStatus("PENDING");
+        aiGenerationMapper.insert(record);
+
+        try {
+            String rawOutput;
+            try {
+                rawOutput = callArkApi(ai, actualModel, prompt);
+            } catch (org.springframework.web.client.RestClientException e) {
+                // 文本模型可能不可用，降级到默认文本模型重试
+                if (!actualModel.equals(ModelConstants.DEFAULT_TEXT_MODEL)) {
+                    log.warn("Enrich model {} call failed ({}), degrading to default {}",
+                            actualModel, e.getMessage(), ModelConstants.DEFAULT_TEXT_MODEL);
+                    degraded = true;
+                    actualModel = ModelConstants.DEFAULT_TEXT_MODEL;
+                    rawOutput = callArkApi(ai, actualModel, prompt);
+                } else {
+                    throw e;
+                }
+            }
+            record.setOutputJson(rawOutput);
+            com.trip.planner.dto.ai.AiNodeEnrichDto dto =
+                    JsonExtractor.extract(rawOutput, com.trip.planner.dto.ai.AiNodeEnrichDto.class);
+            aiGenerationMapper.updateStatus(record.getId(), "SUCCESS", null, null);
+            log.info("Node enrich SUCCESS, recordId={}, name={}, model={}, degraded={}",
+                    record.getId(), name, actualModel, degraded);
+            return com.trip.planner.dto.response.NodeEnrichResponse.builder()
+                    .placeType(dto.getPlace_type())
+                    .suggestedDuration(dto.getSuggested_duration())
+                    .highlight(dto.getHighlight())
+                    .description(dto.getDescription())
+                    .openTime(dto.getOpen_time())
+                    .ticketInfo(dto.getTicket_info())
+                    .estimatedCost(dto.getEstimated_cost())
+                    .modelUsed(actualModel)
+                    .build();
+        } catch (org.springframework.web.client.RestClientException e) {
+            log.error("Node enrich FAILED (network), recordId={}", record.getId(), e);
+            aiGenerationMapper.updateStatus(record.getId(), "FAILED", e.getMessage(), null);
+            throw new AiGenerationException("AI 填充调用失败（网络错误）: " + e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("Node enrich FAILED, recordId={}", record.getId(), e);
+            aiGenerationMapper.updateStatus(record.getId(), "FAILED", e.getMessage(), null);
+            throw e instanceof AiGenerationException
+                    ? (AiGenerationException) e
+                    : new AiGenerationException("AI 填充调用失败: " + e.getMessage(), e);
+        }
+    }
+
     private String callArkApi(AppProperties.Ai ai, String model, String prompt) {
         ArrayNode content = MAPPER.createArrayNode();
         ObjectNode textPart = content.addObject();
@@ -188,22 +259,15 @@ public class ArkAiServiceImpl implements AiService {
 
     /**
      * 调用 Ark responses API，content 为一条 user 消息的内容片段数组（文本 + 可选图片）。
+     * 统一关闭思考链（"thinking":{"type":"disabled"}）并限制 max_output_tokens 以缩短响应耗时。
      */
     private String callArkApiWithContent(AppProperties.Ai ai, String model, ArrayNode content) {
-        return callArkApiWithContent(ai, model, content, false);
-    }
-
-    /**
-     * 调用 Ark responses API。
-     *
-     * @param disableThinking 为 true 时关闭模型思考链（识图场景），可显著缩短响应时间
-     */
-    private String callArkApiWithContent(AppProperties.Ai ai, String model, ArrayNode content, boolean disableThinking) {
         ObjectNode body = MAPPER.createObjectNode();
         body.put("model", model);
         body.put("stream", false);
-        if (disableThinking) {
-            body.putObject("thinking").put("type", "disabled");
+        body.putObject("thinking").put("type", "disabled");
+        if (ai.getMaxOutputTokens() > 0) {
+            body.put("max_output_tokens", ai.getMaxOutputTokens());
         }
 
         ArrayNode input = body.putArray("input");

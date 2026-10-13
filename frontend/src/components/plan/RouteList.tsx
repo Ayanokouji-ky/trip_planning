@@ -1,23 +1,11 @@
 import { Card, List, Tag, Typography } from 'antd';
-import {
-  ArrowRightOutlined,
-  CarOutlined,
-  EnvironmentOutlined,
-  ManOutlined,
-  RocketOutlined,
-} from '@ant-design/icons';
+import { ArrowRightOutlined, BulbOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import type { PlanNode, PlanRoute } from '@/types/plan';
 import { formatDistance } from '@/utils/geo';
 import { formatSeconds } from '@/utils/time';
+import { TRANSPORT_META } from './RouteCard';
 
 const { Text } = Typography;
-
-const TRANSPORT_META: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
-  driving: { label: '驾车', icon: <CarOutlined />, color: 'blue' },
-  walking: { label: '步行', icon: <ManOutlined />, color: 'green' },
-  transit: { label: '公交', icon: <RocketOutlined />, color: 'orange' },
-  riding: { label: '骑行', icon: <RocketOutlined />, color: 'purple' },
-};
 
 interface Props {
   routes: PlanRoute[];
@@ -69,6 +57,14 @@ export default function RouteList({ routes, nodes, visibleNodeIds }: Props) {
                     {formatDistance(route.distance)} · {formatSeconds(route.duration)}
                   </Text>
                 </div>
+                {route.suggestion && (
+                  <div style={{ marginTop: 2 }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      <BulbOutlined style={{ color: '#faad14', marginRight: 4 }} />
+                      {route.suggestion}
+                    </Text>
+                  </div>
+                )}
               </div>
             </List.Item>
           );

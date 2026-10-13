@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import {
   DndContext,
   KeyboardSensor,
@@ -17,8 +18,9 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { HolderOutlined } from '@ant-design/icons';
-import type { PlanNode } from '@/types/plan';
+import type { PlanNode, PlanRoute } from '@/types/plan';
 import NodeCard from './NodeCard';
+import RouteCard from './RouteCard';
 
 interface ItemProps {
   node: PlanNode;
@@ -28,7 +30,7 @@ interface ItemProps {
   onDelete: (node: PlanNode) => void;
 }
 
-/** 可排序的节点卡片：左侧拖拽手柄 + NodeCard */
+/** 可排序的节点卡片：整卡拖拽（8px 激活阈值防点击/滚动误触），右上是视觉提示 */
 function SortableItem({ node, active, onSelect, onEdit, onDelete }: ItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: node.id });
@@ -36,43 +38,25 @@ function SortableItem({ node, active, onSelect, onEdit, onDelete }: ItemProps) {
   return (
     <div
       ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      className={`sortable-node-card${isDragging ? ' sortable-node-card--dragging' : ''}`}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
-        display: 'flex',
-        alignItems: 'stretch',
-        gap: 4,
-        opacity: isDragging ? 0.7 : 1,
         position: isDragging ? 'relative' : undefined,
         zIndex: isDragging ? 10 : undefined,
+        touchAction: 'none',
       }}
     >
-      <div
-        {...attributes}
-        {...listeners}
-        className="export-ignore drag-handle"
-        title="拖拽调整顺序"
-        style={{
-          cursor: 'grab',
-          color: '#bfbfbf',
-          display: 'flex',
-          alignItems: 'center',
-          padding: '0 4px',
-          touchAction: 'none',
-          fontSize: 16,
-        }}
-      >
-        <HolderOutlined />
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <NodeCard
-          node={node}
-          active={active}
-          onSelect={onSelect}
-          onEdit={onEdit}
-          onDelete={onDelete}
-        />
-      </div>
+      <HolderOutlined className="export-ignore drag-hint" />
+      <NodeCard
+        node={node}
+        active={active}
+        onSelect={onSelect}
+        onEdit={onEdit}
+        onDelete={onDelete}
+      />
     </div>
   );
 }
@@ -80,6 +64,8 @@ function SortableItem({ node, active, onSelect, onEdit, onDelete }: ItemProps) {
 interface Props {
   /** 当天节点（已按 orderIndex 排序） */
   nodes: PlanNode[];
+  /** 全部路线（用于节点间交错渲染 RouteCard） */
+  routes: PlanRoute[];
   selectedNodeId: number | null;
   /** 拖拽结束，参数为重排后的节点 ID 顺序 */
   onReorder: (orderedIds: number[]) => void;
@@ -88,16 +74,20 @@ interface Props {
   onDelete: (node: PlanNode) => void;
 }
 
-/** 当天节点的拖拽排序列表（仅支持单天内排序，跨天不走拖拽） */
+/**
+ * 当天节点的拖拽排序列表（仅支持单天内排序，跨天不走拖拽）。
+ * 节点间交错插入路线卡片（NodeCard → RouteCard → NodeCard…），RouteCard 不参与排序。
+ */
 export default function DraggableNodeList({
   nodes,
+  routes,
   selectedNodeId,
   onReorder,
   onSelect,
   onEdit,
   onDelete,
 }: Props) {
-  // 鼠标/触摸：移动 8px 才激活拖拽，避免滚动与点击误触（触摸端手柄已 touchAction:none）；
+  // 鼠标/触摸：移动 8px 才激活拖拽，点击与拖拽共存（触摸端整卡 touchAction:none）；
   // 键盘：空格开始、方向键移动、空格放下
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -118,15 +108,23 @@ export default function DraggableNodeList({
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={nodes.map((n) => n.id)} strategy={verticalListSortingStrategy}>
-        {nodes.map((node) => (
-          <SortableItem
-            key={node.id}
-            node={node}
-            active={selectedNodeId === node.id}
-            onSelect={onSelect}
-            onEdit={onEdit}
-            onDelete={onDelete}
-          />
+        {nodes.map((node, i) => (
+          <Fragment key={node.id}>
+            <SortableItem
+              node={node}
+              active={selectedNodeId === node.id}
+              onSelect={onSelect}
+              onEdit={onEdit}
+              onDelete={onDelete}
+            />
+            {i < nodes.length - 1 && (
+              <RouteCard
+                route={routes.find(
+                  (r) => r.fromNodeId === node.id && r.toNodeId === nodes[i + 1].id,
+                )}
+              />
+            )}
+          </Fragment>
         ))}
       </SortableContext>
     </DndContext>

@@ -18,4 +18,6 @@ public class PlanRoute implements Serializable {
     private BigDecimal distance;
     private Integer duration;
     private BigDecimal cost;
+    /** 出行建议文案（Phase 19） */
+    private String suggestion;
 }

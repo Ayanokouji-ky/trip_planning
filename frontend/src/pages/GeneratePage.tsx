@@ -56,15 +56,17 @@ export default function GeneratePage() {
   };
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto' }}>
+    <div className="generate-page" style={{ maxWidth: 720, margin: '0 auto' }}>
       <Disclaimer />
-      <Card style={{ marginTop: 24 }}>
-        <Title level={4} style={{ marginBottom: 4 }}>
+      <div className="generate-hero">
+        <Title level={3} style={{ color: '#fff', marginBottom: 4 }}>
           AI 生成行程
         </Title>
-        <Paragraph type="secondary">
+        <Paragraph style={{ color: 'rgba(255,255,255,0.85)', marginBottom: 0 }}>
           填写旅行需求由 AI 生成攻略，或上传攻略 / 行程图片由 AI 识别后生成行程。
         </Paragraph>
+      </div>
+      <Card className="generate-card" style={{ marginTop: 16 }}>
         <Tabs
           defaultActiveKey="text"
           items={[

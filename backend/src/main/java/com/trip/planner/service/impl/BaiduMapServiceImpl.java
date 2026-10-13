@@ -76,8 +76,9 @@ public class BaiduMapServiceImpl implements MapService {
     @SuppressWarnings("unchecked")
     public RouteInfoResponse route(BigDecimal fromLat, BigDecimal fromLng, BigDecimal toLat, BigDecimal toLng, String transportMode) {
         String ak = appProperties.getBaidu().getAk();
-        String baseUrl = appProperties.getBaidu().getRouteUrl();
         String mode = transportMode != null ? transportMode : "driving";
+        // Phase 19：按出行方式分发到百度 direction v2 对应端点
+        String baseUrl = resolveDirectionUrl(mode);
         String origin = fromLat + "," + fromLng;
         String dest = toLat + "," + toLng;
         URI uri = UriComponentsBuilder.fromHttpUrl(baseUrl)
@@ -108,17 +109,64 @@ public class BaiduMapServiceImpl implements MapService {
             if (routes.isEmpty()) {
                 return fallbackRoute(fromLat, fromLng, toLat, toLng, mode);
             }
-            Map<String, Object> firstRoute = routes.get(0);
-            BigDecimal distance = new BigDecimal(String.valueOf(firstRoute.get("distance")));
-            Integer duration = Integer.valueOf(String.valueOf(firstRoute.get("duration")));
+            // 公交(transit)可能返回多方案，统一取耗时最短的一条；其余模式取第一条
+            Map<String, Object> bestRoute = "transit".equals(mode)
+                    ? pickShortestByDuration(routes) : routes.get(0);
+            if (bestRoute.get("distance") == null || bestRoute.get("duration") == null) {
+                return fallbackRoute(fromLat, fromLng, toLat, toLng, mode);
+            }
+            BigDecimal distance = new BigDecimal(String.valueOf(bestRoute.get("distance")));
+            Integer duration = Integer.valueOf(String.valueOf(bestRoute.get("duration")));
 
             RouteInfoResponse routeResp = RouteInfoResponse.of(distance, duration, mode);
             routeResp.setSource("baidu");
-            log.info("Route: {}m, {}s", distance, duration);
+            log.info("Route: {}m, {}s ({})", distance, duration, mode);
             return routeResp;
         } catch (Exception e) {
             log.warn("Route API exception, falling back to GeoUtils: {}", e.getMessage());
             return fallbackRoute(fromLat, fromLng, toLat, toLng, mode);
+        }
+    }
+
+    /** 按出行方式解析百度 direction v2 端点，未配置时回落 driving */
+    private String resolveDirectionUrl(String mode) {
+        AppProperties.Baidu baidu = appProperties.getBaidu();
+        switch (mode) {
+            case "walking":
+                return baidu.getWalkingUrl() != null ? baidu.getWalkingUrl() : baidu.getRouteUrl();
+            case "transit":
+                return baidu.getTransitUrl() != null ? baidu.getTransitUrl() : baidu.getRouteUrl();
+            case "riding":
+                return baidu.getRidingUrl() != null ? baidu.getRidingUrl() : baidu.getRouteUrl();
+            case "driving":
+            default:
+                return baidu.getRouteUrl();
+        }
+    }
+
+    /** 从多方案中取 duration 最短的一条（transit 场景） */
+    private Map<String, Object> pickShortestByDuration(java.util.List<Map<String, Object>> routes) {
+        Map<String, Object> best = routes.get(0);
+        int bestDuration = parseDuration(best);
+        for (Map<String, Object> r : routes) {
+            int d = parseDuration(r);
+            if (d >= 0 && (bestDuration < 0 || d < bestDuration)) {
+                best = r;
+                bestDuration = d;
+            }
+        }
+        return best;
+    }
+
+    private int parseDuration(Map<String, Object> route) {
+        Object duration = route.get("duration");
+        if (duration == null) {
+            return -1;
+        }
+        try {
+            return Integer.parseInt(String.valueOf(duration));
+        } catch (NumberFormatException e) {
+            return -1;
         }
     }
 

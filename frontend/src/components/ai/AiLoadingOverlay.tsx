@@ -33,16 +33,8 @@ export default function AiLoadingOverlay({ elapsed, timeoutSeconds = 60 }: Props
         justifyContent: 'center',
       }}
     >
-      <div
-        style={{
-          background: '#fff',
-          borderRadius: 12,
-          padding: '40px 56px',
-          textAlign: 'center',
-          minWidth: 320,
-          maxWidth: 420,
-        }}
-      >
+      <div className="ai-loading-panel">
+        <div className="ai-progress" aria-hidden="true" />
         <Spin size="large" />
         <Title level={5} style={{ marginTop: 24, marginBottom: 8 }}>
           AI 正在生成行程

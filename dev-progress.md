@@ -42,6 +42,10 @@
 | Phase 14 | 图片一图流攻略识别生成 | 已完成 | 2026-10-13 | image_import表+识图链路(thinking disabled提速120s→30-60s+截断JSON修复)+双Tab上传/排序/编辑/确认，冒烟全PASS |
 | Phase 15 | 地图视觉与交互优化 | 已完成 | 2026-10-13 | SVG水滴pin+类型配色+起终点旗+线型渐变+setViewport+hoveredNodeId双向联动+MapStyleSwitcher(localStorage)+setTilt(60) 3D+>50节点网格聚合+骨架屏+玻璃拟态InfoWindow，冒烟全PASS |
 | Phase 16 | 窄屏与移动端体验优化 | 已完成 | 2026-10-13 | useBreakpoint+汉堡抽屉+BottomTabBar+60vh地图+FullscreenButton+ResizeObserver+列表Drawer+节点全屏滑动+Mouse/TouchSensor 8px+44px触摸目标+safe-area，375/412px冒烟全PASS |
+| Phase 17 | AI 文本生成提速优化（V3） | 已完成 | 2026-10-13 | thinking disabled 统一文本+识图链路+PromptBuilder 紧凑瘦身+max_output_tokens 8000；实测 3 次 10.2/10.4/10.5s，对比基线 48-58s 提速约 80%，无截断 |
+| Phase 18 | 节点 AI 智能填充（V3） | 已完成 | 2026-10-13 | POST /api/ai/enrich-node(仅名称AI生成全字段/null宁缺勿错)+NodeForm AI填充按钮回填；宽窄巷子 2.2s 全字段回填+生僻名容错+401拦截+冒烟 10/10 PASS |
+| Phase 19 | 多方式路线推荐（V3） | 已完成 | 2026-10-13 | V4 suggestion列+百度4端点分发+四档推荐(≤1km步行/1-5km公交优先+估价/5-30km取优+估价/>30km驾车)+打车本地估价+实测修正公交估价偏高(24.55→18.50)+RouteList/RoutePopup💡文案；四档实测符合分档，冒烟 5/5 PASS |
+| Phase 20 | 前端体验优化（V3） | 已完成 | 2026-10-13 | DraggableNodeList 整卡拖拽(cursor grab/grabbing+拖拽阴影+右上提示图标+8px阈值点击共存)+新组件 RouteCard 交错布局(单天 NodeCard→RouteCard→NodeCard 竖向连接线,全部Tab保留分组+RouteList)+生成页渐变hero/fadeSlide/卡片hover浮起/按钮渐变/AiLoadingOverlay 流动进度条；桌面+375px iframe 冒烟全 PASS，V3 四阶段收官 |
 
 ## 状态说明
 
@@ -225,6 +229,43 @@
 - [x] 全局 CSS（index.css）：html font-size 16px（防 iOS 聚焦缩放）；.map-container:fullscreen（100vw/100vh 去圆角）；.map-fullscreen-btn（absolute top:12 left:12，避开右上角 MapStyleSwitcher）；.fixed-submit-bar / .bottom-tab-bar / .node-detail-overlay 系列（含 env(safe-area-inset-bottom)）；@media(max-width:767px) .ant-btn/.ant-tabs-tab/.drag-handle/.tap-target 44px 最小触摸目标（Space.Compact 内单位按钮豁免防撑高）；index.html viewport 追加 viewport-fit=cover
 - **验证**：前端 ✓ built in 8.20s（chunk>1500kB 警告为已知噪音）；窄屏冒烟采用同源 iframe 法（iframe 拥有独立视口宽度，media query 按其宽度生效）——375px：无横向滚动（scrollWidth 360≤375）、bottom-tab-bar 3 项、汉堡菜单开抽屉、地图高 400px(60vh)、列表 Drawer 含 5 个拖拽手柄、节点覆盖层 1/5→2/5→关闭、Tab 高亮切换、/generate 出现 .fixed-submit-bar；412px：无横向滚动（scrollWidth 397≤412）全项 PASS；控制台无阻塞报错；桌面回归 PASS——两列 Col、无 tab-bar/汉堡、全屏按钮存在、5 手柄、无横向滚动、/generate 无 fixedBar；遗留说明——①全屏 API 在 headless 受控环境受限（fullscreenEnabled=false，按钮存在可点击、退出逻辑正常，真实设备可用）；②拖拽 UI 闭环在受控环境未复现顺序互换，但键盘事件链路有 DndLiveRegion 硬证据在工作（"Draggable item 6 was moved over droppable area 6/7"），handleDragEnd 对 active.id===over.id 的 early return 属正确行为非 bug，传感器组合为 dev-plan 明确要求，代码自 Phase 9 API 实证通过后零改动；API 复核 plan 3 第 1 天顺序=基准，无测试数据污染
 
+### Phase 17 — AI 文本生成提速优化（V3 第 1 阶段）
+
+- [x] ArkAiServiceImpl：thinking disabled 从识图链路抽到公共构造方法 `callArkApiWithContent`（移除布尔开关，文本+识图统一关闭思考链）
+- [x] ArkAiServiceImpl：请求 body 增加 `max_output_tokens`（取自 `app.ai.max-output-tokens`，<=0 时不限制）
+- [x] AppProperties.Ai 新增 `maxOutputTokens`（默认 8000）；application.yml 增加 `app.ai.max-output-tokens: 8000`
+- [x] PromptBuilder：SYSTEM_PROMPT 重写为紧凑版——单行 JSON schema、规则 5 条合并、description/highlight 限 50 字、note 限 30 字、summary 限 80 字、追加「务必以 ]} 结尾」闭合指令；buildUserPrompt 不变
+- **验证**：mvnw clean package BUILD SUCCESS；重启后端实测同 requirement（成都2天，美食和熊猫）连续生成 3 次——10.2s / 10.4s / 10.5s（平均 10.4s），对比 Phase 5/10 基线 48-58s **提速约 80%**，远低于 120s readTimeout；3 次均 code=200，JSON 完整解析（9/10/9 节点，2 天，5/6/5 路线，与 V2 产出规模一致），geocode 定位率 78-90%（单点失败属既定容错），无截断；测试行程 3 个已通过 HTTP DELETE 清理并确认 remaining=0
+
+### Phase 18 — 节点 AI 智能填充（V3 第 2 阶段）
+
+- [x] 后端 DTO：NodeEnrichRequest（name 必填/city 可选/model 可选）+ NodeEnrichResponse（placeType/suggestedDuration/highlight/description/openTime/ticketInfo/estimatedCost/modelUsed，不确定字段 null）+ AiNodeEnrichDto（snake_case 镜像 AI 输出）
+- [x] AiService.enrichNode(name, city, model) + ArkAiServiceImpl 实现：默认文本模型+文本白名单校验+降级重试+thinking disabled（复用 Phase 17 公共构造）+max_output_tokens+JsonExtractor 截断修复；ai_generation 记录 input_content=`[NODE_ENRICH] {name}`
+- [x] PromptBuilder.buildNodeEnrichPrompt：真实景点常识输出、不确定字段 null（宁缺勿错）、highlight≤50字/description≤80字、紧凑单行 JSON+闭合指令
+- [x] AiController 新增 POST /api/ai/enrich-node（@CurrentUser 登录鉴权）
+- [x] 前端：types/ai.ts 增 NodeEnrichRequest/Response；aiApi.enrichNode（120s 超时）；NodeForm 地点名称输入框右侧「AI 填充」按钮（Space.Compact 布局，名称非空可用，ThunderboltOutlined 图标，loading 态），成功回填 7 字段全部可编辑（placeType 非法值兜底 OTHER），失败引导手动填写
+- **验证**：后端 BUILD SUCCESS + 前端 ✓ built 8.64s；API 实测——宽窄巷子(成都) 2.2s code=200 全字段回填（ATTRACTION/120分钟/亮点/描述/开放时间/免费/0元，免费景点费用正确），生僻名「XYZABC不存在的神秘景点123」2.4s code=200 仅 placeType=OTHER 其余 null（宁缺勿错容错），未登录 401 拦截；浏览器冒烟 10/10 PASS——登录→打开测试行程→新增节点→输入宽窄巷子→AI 填充（约 3s，toast「AI 填充完成」）→字段回填断言→保存→节点卡片出现→地图 1 个标记（截图 p18-smoke-test-map.png）→enrich-node 200 无阻塞报错；测试行程 21 已 DELETE 清理确认 remaining=0
+
+### Phase 19 — 多方式路线推荐（V3 第 3 阶段）
+
+- [x] V4__add_route_suggestion.sql：plan_route 增加 suggestion VARCHAR(200) NULL COMMENT '出行建议文案'；schema.sql 同步；已在远程库执行成功（V4Migrate.java 从 application.yml 解析连接凭据，命令行零明文）
+- [x] Entity/Mapper：PlanRoute.suggestion 字段 + PlanRouteMapper.xml resultMap/Base_Column_List/insert/batchInsert/update 全量补列
+- [x] BaiduMapServiceImpl：route() 按 mode 经 resolveDirectionUrl() 分发 4 端点（driving/transit/walking/riding，application.yml 增加 transit-url/walking-url/riding-url）；transit 方案列表按 duration 取最短（pickShortestByDuration）；distance/duration 任一缺失走 fallbackRoute
+- [x] application.yml：app.route.taxi.{base-price:14, base-km:3, per-km:2.3}（打车本地估价可配）
+- [x] RouteServiceImpl.recalculate 分档推荐（直线距离 haversine 分档）：≤1km 步行；1-5km 公交优先（transit source≠baidu 降级 driving）+打车估价；5-30km transit+driving 都查询取耗时短（pickFaster，baidu 真实数据优先）+打车估价；>30km 驾车；cost 写打车估价、suggestion 写推荐文案（估价带「仅供参考」）
+- [x] 实测修正：transit 胜出时打车估价原本按公交绕行距离计算（7.6km→24.55 元，偏高约 30%），新增 drivingDistanceForTaxi 补一次 driving 查询按驾车距离估价（失败回退推荐路线距离），实测 24.55→18.50 元；符合 dev-plan「每条路线最多 2 次百度调用」约束
+- [x] 前端：types/plan.ts PlanRoute.suggestion；RouteList 每条路线 BulbOutlined 黄色灯泡 + 建议文案行；RoutePopup 💡 suggestion 行
+- **验证**：BUILD SUCCESS + ✓ built；实测行程 23（成都 5 节点：春熙路→太古里 978m→武侯祠直线 3.7km→熊猫基地 20.5km→都江堰 71.5km）recalculate 1.7s 产出 4 条路线全部符合分档——978m walking「距离 978m，建议步行约 15 分钟」；3.7km transit「建议公交/地铁约 57 分钟；打车约 19 元，仅供参考」；20.5km driving 取优「建议驾车约 38 分钟；打车约 54 元，仅供参考」；71.5km driving「距离 71.5km，建议驾车约 67 分钟」；transit 失败降级 driving 分支代码审查通过（未强造故障）；浏览器冒烟 5/5 PASS——路线（4 条）卡 4 条记录、全部关键文案片段命中（978m/步行/公交地铁/57分钟/19元/仅供参考/38分钟/54元/71.5km/驾车）、bulb 图标存在、Tag 覆盖步行/公交/驾车、截图确认无溢出错位；行程 23 已 DELETE 清理并确认 404
+
+### Phase 20 — 前端体验优化（V3 第 4 阶段）
+
+- [x] 整卡拖拽（DraggableNodeList）：dnd-kit attributes+listeners 从手柄移到卡片根元素（Mouse/Touch 8px 激活阈值与 KeyboardSensor 保留），点击 onSelect 与拖拽共存（实测真实点击中心/标题区均正常触发选中态）；右上角 HolderOutlined 缩小为纯视觉提示（pointer-events:none、export-ignore）；拖拽中 cursor grabbing + elevation 阴影（sortable-node-card--dragging）；卡片容器 touch-action:none（列表区域）
+- [x] 新组件 RouteCard：紧凑单条路线（方式 Tag + 距离/耗时 + 💡suggestion），竖向虚线连接线样式（route-connector/route-card）；TRANSPORT_META 从 RouteList 抽出共用；route 缺失时仅渲染连接线
+- [x] 交错布局：单天模式 NodeCard(1)→RouteCard(1→2)→NodeCard(2)…（SortableContext 仅含节点 id，RouteCard 不参与排序，拖拽结束乐观更新→重算→权威刷新后交错自动更新）；「全部」Tab 保持按天分组只读 + 底部 RouteList；移动端底部 Drawer 复用 renderItineraryBody 自动生效
+- [x] 生成页视觉（GeneratePage + index.css）：generate-hero 蓝系渐变标题区 + fadeSlide 进场动画、generate-card hover 浮起（shadow+translateY 过渡）、主按钮渐变、多选标签轻渐变、窄屏 hero padding 微调
+- [x] AiLoadingOverlay：面板顶部 3px 流动进度条（ai-progress，aiProgressFlow 渐变位移动画）+ 面板 fadeSlide 进场；窄屏 min-width:0 + margin 适配
+- **验证**：✓ built 8.68s；浏览器冒烟——桌面 /plans/24：4 卡 3 连接线 3 路线卡、drag-hint、cursor grab、真实点击卡片选中态（中心+标题区均触发，曾因冒烟脚本点击落在操作区图标误报 FAIL，经 el.click() 合成点击与 Playwright 真实点击双重复核确认为脚本问题非代码缺陷）、编辑 Modal 正常；/plans/25（AI 实时生成行程）：5 卡 4 连接线交错完整；/generate：hero 渐变 backgroundImage 断言通过、真实生成 10s 流程中 .ai-loading-panel + .ai-progress（animationName=aiProgressFlow）出现并成功跳转新详情页；375px 同源 iframe：详情页底部 Drawer 内 4 卡 3 连接线+scrollWidth 373≤375 无溢出、底部 Tab 栏正常、/generate hero 渐变+fixed-submit-bar 兼容；键盘拖拽 drop 闭环受控环境仍受限（与 Phase 16 同因，live region 无 over 变化证据），API 复核 plan 24 顺序=基准无污染；控制台无阻塞报错；测试行程 24/25 已 DELETE 清理确认 remaining=0；V3 四阶段（17-20）全部收官
+
 ## 变更日志
 | 日期 | 操作人 | 变更内容 |
 |------|--------|----------|
@@ -248,3 +289,7 @@
 | 2026-10-13 | - | Phase 14 完成：V3 建 image_import 表 + ImageImport 后端全链路(multipart校验→uploads落盘→base64→Ark input_image 识图→confirm 生成行程) + 识图关闭 thinking 提速(120s→30-60s)+闭合指令+JsonExtractor 第3.5步截断修复 + aiRestTemplate 120s + multipart 10MB/60MB 配置；前端 GeneratePage 双 Tab + ImageUploadZone(拖拽/粘贴) + ImagePreviewList(dnd-kit 排序) + ImageImportPanel(结果编辑/120s遮罩) + imageApi；API(单图31.3s/3图44.9s/4图58.4s)与浏览器冒烟 7/7 全 PASS，测试数据已清理 |
 | 2026-10-13 | - | Phase 15 完成：SVG水滴pin+类型配色+起终点旗 + 路线线型(实/虚/点)与渐变色+hover加粗 + setViewport 视野自适应 + hoveredNodeId 双向联动(NodeCard 高亮/scrollIntoView + 标记 BOUNCE) + MapStyleSwitcher 日/夜/卫星(localStorage trip.mapStyle) + setTilt(60) 3D + >50 节点自实现网格聚合(点击zoom+2/zoomend重算) + 地图骨架屏 + 玻璃拟态 InfoWindow(index.css 覆盖 .BMap_bubble_pop) + bmapgl.d.ts 类型增补 + DEV window.__tripMap 调试句柄；✓ built + 浏览器冒烟全 PASS，冒烟行程15/16已清理 |
 | 2026-10-13 | - | Phase 16 完成（dev-plan 全部阶段收官）：useBreakpoint Hook(md<768 防闪跳) + AppLayout 汉堡菜单侧抽屉 + GenerateForm 窄屏固定底部提交(.fixed-submit-bar+safe-area) + BaiduMapContainer 60vh/FullscreenButton/ResizeObserver(map.resize) + DraggableNodeList Mouse+Touch+Keyboard 传感器(8px) + BottomTabBar(地图/列表/详情) + NodeDetailOverlay 全屏覆盖(触摸滑动/prev-next/aria-label) + PlanDetailPage 窄屏分支(底部 Drawer 75vh) + index.css(16px/44px 触摸目标/:fullscreen) + viewport-fit=cover；✓ built 8.20s，同源 iframe 窄屏法 375/412px 冒烟全 PASS+桌面回归 PASS，全屏与拖拽 UI 闭环受控环境受限已如实记录，数据无污染 |
+| 2026-10-13 | - | Phase 17 完成（V3 第 1 阶段）：ArkAiServiceImpl thinking disabled 抽公共构造方法(文本+识图统一关闭) + 请求体 max_output_tokens(可配 app.ai.max-output-tokens 默认 8000) + PromptBuilder SYSTEM_PROMPT 紧凑瘦身(单行 schema/字段限长 50/30/80 字/闭合指令)；实测同 requirement 3 次 10.2/10.4/10.5s 对比基线 48-58s 提速约 80%，JSON 完整无截断，测试数据已清理 |
+| 2026-10-13 | - | Phase 18 完成（V3 第 2 阶段）：NodeEnrich DTO 三件套 + AiService.enrichNode(白名单/降级/thinking disabled/JsonExtractor) + PromptBuilder.buildNodeEnrichPrompt(宁缺勿错) + POST /api/ai/enrich-node(登录鉴权) + 前端 NodeForm「AI 填充」按钮回填 7 字段；API 实测宽窄巷子 2.2s 全字段/生僻名容错/401 拦截，浏览器冒烟 10/10 PASS，测试行程已清理 |
+| 2026-10-13 | - | Phase 19 完成（V3 第 3 阶段）：V4 plan_route.suggestion（远程库执行）+ 百度 direction 4 端点分发(transit 取最短方案) + RouteServiceImpl 四档推荐(≤1km 步行/1-5km 公交优先+估价/5-30km 取耗时短+估价/>30km 驾车) + 打车本地估价(app.route.taxi 可配) + 实测修正 transit 胜出估价偏高(按驾车距离重估 24.55→18.50) + 前端 RouteList/RoutePopup 💡 建议文案；四档实测全部符合分档，浏览器冒烟 5/5 PASS，测试行程已清理 |
+| 2026-10-13 | - | Phase 20 完成（V3 第 4 阶段，V3 计划收官）：DraggableNodeList 整卡拖拽(attributes/listeners 上卡根+8px 阈值点击共存+drag-hint 视觉提示+grabbing 阴影+touch-action) + 新组件 RouteCard 竖向连接线 + 单天交错布局(NodeCard→RouteCard→NodeCard，全部 Tab 保持分组+RouteList) + 生成页渐变 hero/fadeSlide/hover 浮起/按钮渐变 + AiLoadingOverlay 流动进度条；桌面+375px iframe 冒烟全 PASS（选中态误报经双重复核排除），数据无污染已清理 |

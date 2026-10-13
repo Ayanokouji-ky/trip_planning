@@ -49,6 +49,8 @@ export interface PlanRoute {
   distance?: number;
   duration?: number;
   cost?: number;
+  /** 出行建议文案（Phase 19，打车估价带"仅供参考"） */
+  suggestion?: string | null;
 }
 
 export interface PlanDetailResponse {

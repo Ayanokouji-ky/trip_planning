@@ -32,6 +32,13 @@ export default function RoutePopup({ route, from, to }: Props) {
       <Text type="secondary" style={{ fontSize: 12 }}>
         {formatDistance(route.distance)} · 约 {formatSeconds(route.duration)}
       </Text>
+      {route.suggestion && (
+        <div style={{ marginTop: 2 }}>
+          <Text type="secondary" style={{ fontSize: 11 }}>
+            💡 {route.suggestion}
+          </Text>
+        </div>
+      )}
       <div style={{ marginTop: 4 }}>
         <Text type="secondary" style={{ fontSize: 11 }}>
           距离与耗时为规划参考，实际以路况为准

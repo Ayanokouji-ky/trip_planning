@@ -435,3 +435,180 @@ frontend/src/
 13. iPhone SE 模拟（375px）→ 生成表单单列 → 地图全屏 → 底部 Sheet 展开 → 拖拽排序可用
 14. 底部 Tab 栏切换地图/列表/详情 → 汉堡菜单展开侧抽屉
 15. 编辑他人行程 → 返回 403 → 前端 Toast 提示
+
+---
+
+# V3 迭代实施计划（基于第二轮用户反馈）
+
+## V3 Context
+
+基于用户使用反馈的四点改进需求，在已上线 V2 基础上迭代。保持现有技术栈不变，无新增表，仅 `plan_route` 增加 1 列。
+
+**需求映射**：
+
+| # | 用户反馈 | 对应阶段 |
+|---|---|---|
+| 1 | 文本生成行程速度慢、经常超时 | Phase 17 — AI 生成提速优化 |
+| 2 | 新增节点表单字段过多，希望只输入景点名称由 AI 生成其余信息 | Phase 18 — 节点 AI 智能填充 |
+| 3 | 路线仅驾车一种方式，希望按距离推荐步行/公交/打车（含估价） | Phase 19 — 多方式路线推荐 |
+| 4 | 拖拽按钮不明显、表单页面色彩单调缺动态感、路线与节点分离不直观 | Phase 20 — 前端体验优化 |
+
+**开发顺序**（按依赖关系）：
+1. Phase 17 — AI 生成提速（独立后端优化，收益立竿见影）
+2. Phase 18 — 节点 AI 智能填充（复用 Phase 17 的提示词瘦身与 thinking disabled）
+3. Phase 19 — 多方式路线推荐（后端路线服务扩展 + V4 迁移）
+4. Phase 20 — 前端体验优化（纯前端，含 Phase 19 建议文案的展示）
+
+## V3 新增/修改文件
+
+```
+backend/src/main/java/com/trip/planner/
+├── controller/       {AiController +enrich-node}              # 修改
+├── dto/
+│   ├── request/      {NodeEnrichRequest}                      # 新增
+│   └── response/     {NodeEnrichResponse}                     # 新增
+├── service/          {AiService +enrichNode, BaiduMapService +walking/transit/riding 查询}  # 修改
+│   └── impl/           {ArkAiServiceImpl, BaiduMapServiceImpl, RouteServiceImpl 推荐策略}  # 修改
+└── util/             {PromptBuilder +紧凑提示词 +nodeEnrichPrompt}  # 修改
+
+backend/src/main/resources/
+├── application.yml   # +app.baidu.direction-url-{walking,transit,riding} +app.route.taxi 估价配置
+└── db/migration/
+    └── V4__add_route_suggestion.sql                           # 新增迁移脚本
+
+frontend/src/
+├── api/aiApi.ts                                                # +enrichNode
+├── types/ai.ts                                                 # +NodeEnrich 类型
+├── components/plan/
+│   ├── NodeForm.tsx            # +AI 填充按钮
+│   ├── DraggableNodeList.tsx   # 整卡拖拽改造
+│   ├── RouteCard.tsx           # 新增（单条路线卡，供交错布局复用）
+│   └── RouteList.tsx           # 复用 RouteCard + 建议文案
+├── pages/PlanDetailPage.tsx    # 节点/路线交错布局
+├── components/ai/GenerateForm.tsx + pages/GeneratePage.tsx     # 视觉动态优化
+└── index.css                                                   # 动效/渐变/连接线样式
+```
+
+## V3 实施阶段
+
+### Phase 17 — AI 文本生成提速优化
+
+**目标**：降低文本生成耗时与超时率。现状基线：deepseek-v4-1-flash 实测 48–58s/次，120s readTimeout 下偶发超时。
+
+**优化方案对比**：
+
+| 方案 | 预期收益 | 改动成本 | 本期落地 |
+|---|---|---|---|
+| 文本请求关闭 thinking（Phase 14 识图已验证：120s→30-60s） | 高 | 极低（body 加 1 字段） | ✅ |
+| PromptBuilder 提示词瘦身：压缩 schema 描述、去冗余示例、字段输出限长 | 中 | 低 | ✅ |
+| 提示词强制紧凑 JSON（无缩进/无解释文本/「务必以 ]} 结尾」） | 中 | 低 | ✅ |
+| 限制 max_output_tokens（防长尾输出） | 中 | 低 | ✅ |
+| SSE 流式输出/异步任务轮询 | 高 | 高（前后端架构改造） | ❌ 列入后续可选 |
+
+**后端**：
+- `ArkAiServiceImpl.generateItinerary`：请求 body 增加 `"thinking":{"type":"disabled"}`（识图链路 Phase 14 已有，抽公共构造方法）
+- `PromptBuilder`：重写系统提示——紧凑 JSON schema、去除重复说明、description/highlight 限 50 字内；追加截断闭合指令
+- 请求参数增加 `max_output_tokens`（application.yml 可配 `app.ai.max-output-tokens`，默认 8000）
+- `ai_generation` 记录不变（可对比耗时）
+
+**验证**：同一 requirement（成都2天美食熊猫）生成 3 次，记录耗时对比基线 48–58s；确认无截断（`]} ` 闭合）、节点数与 V2 产出一致；前端 120s 倒计时遮罩不变。
+
+### Phase 18 — 节点 AI 智能填充
+
+**目标**：新增节点时只输入景点名称，AI 自动生成其余字段并回填表单，用户可再修改。
+
+**后端**：
+- `NodeEnrichRequest`：`{name(必填), city(可选，默认行程城市)}`；`NodeEnrichResponse`：`{placeType(ATTRACTION/RESTAURANT/HOTEL/TRANSPORT/OTHER), suggestedDuration(分钟), highlight, description, openTime, ticketInfo, estimatedCost}`
+- `AiService.enrichNode(name, city)` + ArkAiServiceImpl 实现：默认文本模型（支持白名单 model 参数）、thinking disabled、紧凑 JSON、截断修复复用 `JsonExtractor`
+- `PromptBuilder.nodeEnrichPrompt`：要求基于真实景点常识输出，不确定的字段返回 null（宁缺勿错）；门票/费用标注「仅供参考」由前端文案兜底
+- `AiController` 新增 `POST /api/ai/enrich-node`（登录鉴权）；`ai_generation` 记录（input_type=TEXT，input_content=`[NODE_ENRICH] {name}`）
+- 超时：复用 aiRestTemplate 120s
+
+**前端**：
+- `NodeForm`：地点名称输入框后新增「AI 填充」按钮（名称非空可用）；点击后按钮 loading 调用 enrichNode，成功回填 类型/时长/亮点/描述/开放时间/门票/预估费用（全部可编辑），失败 message 提示改为手动填写
+- `aiApi.ts` + `types/ai.ts` 新增对应方法与类型
+
+**验证**：输入「宽窄巷子」→ AI 填充 → 字段完整可编辑 → 保存后 geocode 正常定位；输入生僻名称容错（部分字段 null 不报错）；`ai_generation` 有记录。
+
+### Phase 19 — 多方式路线推荐
+
+**目标**：按节点间距推荐出行方式（步行/骑行/公交/驾车/打车），打车给出预估价格。`plan_route.transport_mode`/`cost` 字段已存在，直接复用。
+
+**推荐策略（规则分档，后端实现）**：
+
+| 距离 d | 推荐方式 | 说明 |
+|---|---|---|
+| d ≤ 1000m | walking | 步行可达，查百度 walking 路线 |
+| 1000 < d ≤ 5000m | transit（降级 riding→driving） | 公交/地铁优先，suggestion 附打车估价 |
+| 5000 < d ≤ 30000m | transit / driving | 查 transit 与 driving 取耗时较短者，suggestion 附打车估价 |
+| d > 30000m | driving | 驾车为主 |
+
+**后端**：
+- `BaiduMapService` 扩展：`walkingRoute`/`transitRoute`/`ridingRoute`（application.yml 增加 3 个 direction-url；transit 取方案列表中耗时最短的一条）
+- 打车估价（百度打车 API 需企业授权，本期本地估算）：`app.route.taxi`（base-price 14 元含 base-km 3km、per-km 2.3 元，城市可调），公式 `base + max(0, km-baseKm) * perKm`
+- `RouteServiceImpl.recalculate` 改造：按上表分档查询（每条路线最多 2 次百度调用）；`transport_mode` 写推荐方式，`cost` 写打车估价（建议打车时），新增 `suggestion` 写推荐文案（如「距离 850m，建议步行约 12 分钟」「建议打车，预计 23 元，仅供参考」）
+- V4 迁移：`ALTER TABLE plan_route ADD COLUMN suggestion VARCHAR(200) NULL COMMENT '出行建议文案'`
+- `RouteResponse`/`RouteInfoResponse` 增加 `suggestion`；两节点任一未定位时沿用现状（跳过该路线）
+
+**前端**：
+- `RouteList`/地图 RoutePopup：展示推荐方式图标 + 距离/耗时 + 建议文案（打车估价带「仅供参考」）
+- 折线线型按 transport_mode 区分（Phase 15 的 MODE_STROKE 已支持 4 种，无需改造）
+
+**验证**：构造 3 对短/中/长距节点 → recalculate 后 mode/suggestion/cost 符合分档；transit 查询失败降级 driving 不报错；地图折线与文案联动。
+
+### Phase 20 — 前端体验优化
+
+**目标**：① 整卡拖拽替代不明显的手柄按钮；② 生成表单页面视觉增强与动效；③ 详情页路线卡片置于节点之间（交错布局）。
+
+**1. 整卡拖拽（DraggableNodeList）**：
+- dnd-kit `listeners` 从手柄移到整张 NodeCard（`setActivatorNodeRef` 移除，`attributes`+`listeners` 上卡片根元素）；保留 Mouse/Touch 8px 激活距离与 KeyboardSensor
+- 冲突处理：编辑/删除按钮 `stopPropagation`（已有）；卡片点击 onSelect 与拖拽共存（8px 阈值内不激活拖拽，click 正常触发）
+- 视觉：卡片 `cursor: grab`/拖拽中 `grabbing`；原手柄图标缩小为右侧视觉提示（不再限制拖拽区域）；拖拽中卡片 elevation 阴影
+- 移动端：卡片容器 `touch-action: none` 仅限列表区域，防页面滚动冲突
+
+**2. 生成页视觉动态（GenerateForm/GeneratePage + index.css）**：
+- ConfigProvider 主题微调：主色渐变（`colorPrimary` 保持蓝系，按钮用 CSS 渐变背景）
+- 页面顶部标题区渐变背景 + 进场 fadeSlide 动画（CSS keyframes，无新依赖）
+- 表单卡片 hover 浮起（shadow 过渡）、分区图标点缀色、Tag/Segmented 选中态渐变
+- AiLoadingOverlay 增加顶部流动进度条动画
+- 保持 V2 移动端布局不变（44px 触摸目标、fixed-submit-bar 兼容）
+
+**3. 路线交错布局（PlanDetailPage + 新组件 RouteCard）**：
+- 从 `RouteList` 抽取单条路线渲染为 `RouteCard`（紧凑：图标 + 方式 + 距离/耗时 + suggestion 建议文案）
+- 单天模式改为交错渲染：`NodeCard(1) → RouteCard(1→2) → NodeCard(2) → …`，RouteCard 带竖向连接线样式
+- 拖拽兼容：`SortableContext` 仅含节点 id（RouteCard 不参与排序），拖拽结束 → 乐观更新 → 重算 → 权威刷新后交错顺序自动更新
+- 「全部」Tab 保持按天分组只读（不做交错）；移动端底部 Drawer 内同样应用交错布局
+
+**验证**：桌面 + 375px iframe 冒烟——整卡可拖拽且按钮/卡片点击正常、拖拽后顺序与路线交错刷新；生成页动画与渐变生效、120s 遮罩进度条；交错布局展示完整；控制台无报错。
+
+## V3 数据库变更
+
+| 版本 | 脚本 | 内容 |
+|------|------|------|
+| V4 | `db/migration/V4__add_route_suggestion.sql` | `plan_route` 增加 `suggestion VARCHAR(200) NULL`（出行建议文案） |
+
+## V3 关键风险与对策
+
+| 风险 | 对策 |
+|---|---|
+| thinking disabled 输出截断 | 提示词「务必以 ]} 结尾」闭合指令 + JsonExtractor 截断修复（Phase 14 已验证） |
+| 提示词瘦身导致生成质量下降 | 保留字段 schema 完整定义 + 必填约束；对比 V2 产出节点数/字段完整度 |
+| transit 方向 API 返回多方案/无方案 | 取耗时最短方案；空结果按 riding→driving 降级链兜底 |
+| 打车估价与实际价格差异 | 文案统一标注「预估，仅供参考」；单价配置化可按城市调整 |
+| 整卡拖拽在移动端与页面滚动冲突 | 8px 激活阈值 + 列表容器 touch-action 控制；Autoscroll 保持默认 |
+| 交错布局拖拽时 RouteCard 闪烁 | RouteCard 不进 SortableContext，用 CSS transition 平滑重排 |
+| recalculate 增加百度调用次数（每条 +1） | 分档最多查 2 种方式；沿用串行 + 失败不中断策略 |
+| enrich-node 幻觉（生僻地点编造信息） | 提示词「不确定字段返回 null」；前端回填后人工可改；门票/费用带「仅供参考」 |
+
+## V3 验证清单
+
+1. 文本生成 3 次实测耗时对比基线（目标：无 120s 超时，耗时较 V2 下降）
+2. 「AI 填充」：输入知名景点 → 字段回填可编辑 → 保存定位正常；生僻地点部分字段为空不报错
+3. 短距节点对（<1km）→ 推荐步行；中距（1–5km）→ 公交优先 + 打车估价；长距（>5km）→ 公交/驾车取优
+4. RouteList 与 RoutePopup 显示建议文案，打车估价带「仅供参考」
+5. transit 接口异常时降级 driving，recalculate 不中断
+6. 整卡拖拽：桌面鼠标 + 375px 触摸模拟均可用；编辑/删除/卡片点击不受影响
+7. 拖拽排序后交错布局顺序正确，地图重绘正常
+8. 生成页渐变/动画生效，窄屏布局与 Phase 16 适配不回退
+9. `ai_generation` 记录 enrich-node 调用（input_content 带 [NODE_ENRICH] 前缀）
+10. V4 迁移脚本执行后旧数据 suggestion 为 NULL 不影响既有展示

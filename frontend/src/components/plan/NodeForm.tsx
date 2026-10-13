@@ -1,14 +1,23 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  Button,
   Form,
   Input,
   InputNumber,
+  message,
   Modal,
   Select,
+  Space,
 } from 'antd';
+import { ThunderboltOutlined } from '@ant-design/icons';
 import type { PlanNode, NodeSaveRequest } from '@/types/plan';
+import type { NodeEnrichResponse } from '@/types/ai';
+import { aiApi } from '@/api/aiApi';
 
 const { TextArea } = Input;
+
+/** 合法节点类型（与后端枚举一致） */
+const PLACE_TYPES = ['ATTRACTION', 'RESTAURANT', 'HOTEL', 'TRANSPORT', 'OTHER'];
 
 interface Props {
   open: boolean;
@@ -21,9 +30,11 @@ interface Props {
   onCancel: () => void;
 }
 
-/** 新增/编辑节点弹窗表单 */
+/** 新增/编辑节点弹窗表单（Phase 18：支持按名称 AI 填充） */
 export default function NodeForm({ open, node, dayId, submitting, onSubmit, onCancel }: Props) {
   const [form] = Form.useForm<NodeSaveRequest>();
+  const [enriching, setEnriching] = useState(false);
+  const placeName = Form.useWatch('placeName', form);
 
   useEffect(() => {
     if (open) {
@@ -47,6 +58,34 @@ export default function NodeForm({ open, node, dayId, submitting, onSubmit, onCa
     }
   }, [open, node, dayId, form]);
 
+  /** Phase 18：按地点名称调用 AI 填充其余字段（全部可编辑） */
+  const handleEnrich = async () => {
+    const name = (placeName || '').trim();
+    if (!name) {
+      message.warning('请先输入地点名称');
+      return;
+    }
+    setEnriching(true);
+    try {
+      const res: NodeEnrichResponse = await aiApi.enrichNode({ name });
+      form.setFieldsValue({
+        placeType: res.placeType && PLACE_TYPES.includes(res.placeType) ? res.placeType : 'OTHER',
+        suggestedDuration: res.suggestedDuration ?? undefined,
+        highlight: res.highlight ?? undefined,
+        description: res.description ?? undefined,
+        openTime: res.openTime ?? undefined,
+        ticketInfo: res.ticketInfo ?? undefined,
+        estimatedCost: res.estimatedCost ?? undefined,
+      });
+      message.success('AI 填充完成，字段可继续修改');
+    } catch {
+      // client 拦截器已提示具体错误；此处引导手动填写
+      message.info('AI 填充失败，请手动填写相关字段');
+    } finally {
+      setEnriching(false);
+    }
+  };
+
   return (
     <Modal
       title={node ? '编辑节点' : '新增节点'}
@@ -62,12 +101,26 @@ export default function NodeForm({ open, node, dayId, submitting, onSubmit, onCa
         <Form.Item name="dayId" hidden>
           <InputNumber />
         </Form.Item>
-        <Form.Item
-          name="placeName"
-          label="地点名称"
-          rules={[{ required: true, message: '请输入地点名称' }]}
-        >
-          <Input placeholder="如：宽窄巷子" maxLength={100} />
+        <Form.Item label="地点名称" required style={{ marginBottom: 16 }}>
+          <Space.Compact block>
+            <Form.Item
+              name="placeName"
+              noStyle
+              rules={[{ required: true, message: '请输入地点名称' }]}
+            >
+              <Input placeholder="如：宽窄巷子（输入后可点 AI 填充）" maxLength={100} />
+            </Form.Item>
+            <Button
+              type="primary"
+              ghost
+              icon={<ThunderboltOutlined />}
+              loading={enriching}
+              disabled={!(placeName || '').trim()}
+              onClick={handleEnrich}
+            >
+              AI 填充
+            </Button>
+          </Space.Compact>
         </Form.Item>
         <Form.Item name="placeType" label="类型" initialValue="ATTRACTION">
           <Select

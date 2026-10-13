@@ -13,12 +13,38 @@ public class AppProperties {
     private Ai ai = new Ai();
     private Jwt jwt = new Jwt();
     private Upload upload = new Upload();
+    private Route route = new Route();
 
     @Data
     public static class Baidu {
         private String ak;
         private String geocodeUrl;
         private String routeUrl;
+        /** 公交/跨城公交路线规划（Phase 19） */
+        private String transitUrl;
+        /** 步行路线规划（Phase 19） */
+        private String walkingUrl;
+        /** 骑行路线规划（Phase 19） */
+        private String ridingUrl;
+    }
+
+    /**
+     * 路线推荐配置（Phase 19）：打车本地估价参数（百度打车 API 需企业授权，本期本地估算）。
+     * 估价公式：base + max(0, km - baseKm) * perKm
+     */
+    @Data
+    public static class Route {
+        private Taxi taxi = new Taxi();
+
+        @Data
+        public static class Taxi {
+            /** 起步价（元，含起步里程） */
+            private double basePrice = 14;
+            /** 起步里程（公里） */
+            private double baseKm = 3;
+            /** 超出起步里程后每公里单价（元） */
+            private double perKm = 2.3;
+        }
     }
 
     @Data
@@ -27,6 +53,8 @@ public class AppProperties {
         private String endpoint;
         private String model;
         private int timeoutMs = 60000;
+        /** 单次生成最大输出 token 数，防止长尾输出拖长耗时（<=0 时不限制） */
+        private int maxOutputTokens = 8000;
     }
 
     @Data

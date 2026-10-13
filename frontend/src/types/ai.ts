@@ -80,6 +80,30 @@ export interface GeocodeResponse {
   level?: string;
 }
 
+/** ===== Phase 18：节点 AI 智能填充 ===== */
+
+/** 节点 AI 填充请求：只输入地点名称，AI 生成其余字段 */
+export interface NodeEnrichRequest {
+  name: string;
+  /** 可选：所在城市（帮助消歧） */
+  city?: string;
+  /** 可选：指定 AI 模型 ID */
+  model?: string;
+}
+
+/** 节点 AI 填充响应：不确定的字段为 null（宁缺勿错），全部可编辑 */
+export interface NodeEnrichResponse {
+  placeType?: string;
+  suggestedDuration?: number;
+  highlight?: string | null;
+  description?: string | null;
+  openTime?: string | null;
+  ticketInfo?: string | null;
+  estimatedCost?: number | null;
+  /** 本次填充实际使用的模型 ID */
+  modelUsed: string;
+}
+
 export interface RouteInfoResponse {
   distance?: number;
   duration?: number;

@@ -256,8 +256,10 @@ export default function PlanDetailPage() {
       {visibleNodes.length === 0 ? (
         <Empty description="当天还没有节点" />
       ) : activeDayId != null ? (
+        // 单天模式：节点间交错插入路线卡片（RouteCard 随节点顺序自动更新）
         <DraggableNodeList
           nodes={visibleNodes}
+          routes={current!.routes}
           selectedNodeId={selectedNodeId}
           onReorder={(orderedIds) => handleReorder(activeDayId, orderedIds)}
           onSelect={onSelect}
@@ -265,32 +267,38 @@ export default function PlanDetailPage() {
           onDelete={handleDeleteNode}
         />
       ) : (
-        // 全部天：按天分组展示，不支持跨天拖拽
-        [...current!.days]
-          .sort((a, b) => a.dayIndex - b.dayIndex)
-          .map((day) => {
-            const dayNodes = visibleNodes.filter((n) => n.dayId === day.id);
-            if (dayNodes.length === 0) return null;
-            return (
-              <div key={day.id} style={{ marginBottom: 8 }}>
-                <Paragraph type="secondary" style={{ margin: '8px 0 4px', fontWeight: 600 }}>
-                  第 {day.dayIndex} 天
-                </Paragraph>
-                {dayNodes.map((node) => (
-                  <NodeCard
-                    key={node.id}
-                    node={node}
-                    active={selectedNodeId === node.id}
-                    onSelect={onSelect}
-                    onEdit={openNodeForm}
-                    onDelete={handleDeleteNode}
-                  />
-                ))}
-              </div>
-            );
-          })
+        // 全部天：按天分组展示，不支持跨天拖拽，路线集中在底部
+        <>
+          {[...current!.days]
+            .sort((a, b) => a.dayIndex - b.dayIndex)
+            .map((day) => {
+              const dayNodes = visibleNodes.filter((n) => n.dayId === day.id);
+              if (dayNodes.length === 0) return null;
+              return (
+                <div key={day.id} style={{ marginBottom: 8 }}>
+                  <Paragraph type="secondary" style={{ margin: '8px 0 4px', fontWeight: 600 }}>
+                    第 {day.dayIndex} 天
+                  </Paragraph>
+                  {dayNodes.map((node) => (
+                    <NodeCard
+                      key={node.id}
+                      node={node}
+                      active={selectedNodeId === node.id}
+                      onSelect={onSelect}
+                      onEdit={openNodeForm}
+                      onDelete={handleDeleteNode}
+                    />
+                  ))}
+                </div>
+              );
+            })}
+          <RouteList
+            routes={current!.routes}
+            nodes={current!.nodes}
+            visibleNodeIds={visibleNodeIds}
+          />
+        </>
       )}
-      <RouteList routes={current!.routes} nodes={current!.nodes} visibleNodeIds={visibleNodeIds} />
     </>
   );
 

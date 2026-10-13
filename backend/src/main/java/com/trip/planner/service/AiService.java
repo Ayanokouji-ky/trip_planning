@@ -31,4 +31,15 @@ public interface AiService {
      * @param model         指定识图模型 ID（可为 null）
      */
     AiGenerateResult recognizeItineraryFromImages(List<String> imageDataUrls, String model);
+
+    /**
+     * 节点 AI 智能填充（Phase 18）：根据地点名称生成类型/时长/亮点/描述/开放时间/门票/预估费用。
+     * model 为 null/空时使用默认文本模型；不在文本白名单中时抛 BusinessException(400)；
+     * 模型不可用时降级到默认文本模型。不确定的字段为 null（宁缺勿错）。
+     *
+     * @param name  地点名称（必填）
+     * @param city  所在城市（可选，帮助消歧）
+     * @param model 指定文本模型 ID（可为 null）
+     */
+    com.trip.planner.dto.response.NodeEnrichResponse enrichNode(String name, String city, String model);
 }

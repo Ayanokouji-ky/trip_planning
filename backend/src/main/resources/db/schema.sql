@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS `plan_route` (
     `distance`        DECIMAL(10,2) NULL COMMENT '距离(米)',
     `duration`        INT          NULL COMMENT '预计耗时(秒)',
     `cost`            DECIMAL(10,2) NULL COMMENT '交通费用(元)',
+    `suggestion`      VARCHAR(200) NULL COMMENT '出行建议文案',
     PRIMARY KEY (`id`),
     KEY `idx_plan_id` (`plan_id`),
     KEY `idx_from_node` (`from_node_id`),
