@@ -100,7 +100,7 @@ trip_planning/
 ### 1. 克隆仓库
 
 ```bash
-git clone https://gitee.com/Ayanokouji/trip_planning.git
+git clone https://github.com/Ayanokouji-ky/trip_planning.git
 cd trip_planning
 ```
 
