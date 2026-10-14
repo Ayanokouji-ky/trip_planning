@@ -1,7 +1,7 @@
 # 版本说明（Release Notes）
 
 > 项目：AI 旅游行程规划与地图可视化平台（trip_planning）
-> 本文档基于 `dev-plan.md` / `dev-progress.md` 的实际交付进度整理，覆盖 V1（MVP）与 V2（迭代）两个版本的全部已实现功能。
+> 本文档基于 `dev-plan.md` / `dev-progress.md` 的实际交付进度整理，覆盖 V1（MVP）、V2（迭代）与 V3（体验迭代）三个版本的全部已实现功能。
 
 ## 项目简介
 
@@ -13,6 +13,7 @@
 |------|------|----------|----------|
 | V1.0.0 | MVP（Phase 0–11） | 2026-10-12 | AI 攻略生成 + 地图行程可视化 + 行程管理与拖拽排序 + JSON/PNG 导出 + ECS 部署包 |
 | V2.0.0 | 上线反馈迭代（Phase 12–16） | 2026-10-13 | 用户登录与归属隔离 + 可选 AI 模型 + 图片识图生成 + 地图视觉升级 + 移动端体验优化 |
+| V3.0.0 | 体验迭代（Phase 17–20） | 2026-10-14 | AI 生成提速约 80% + 节点 AI 智能填充 + 多方式路线推荐与出行建议 + 前端体验优化 + 注册免登录 |
 
 ---
 
@@ -102,6 +103,39 @@
 
 ---
 
+## V3.0.0（体验迭代）
+
+**范围**：基于 V3 开发计划（dev-plan.md Phase 17–20）的体验与效率迭代，另含注册流程修复优化。
+
+### 1. AI 文本生成提速（Phase 17）
+- 火山方舟调用统一注入 `"thinking":{"type":"disabled"}`，提示词瘦身（紧凑 schema + 字数限制 + JSON 闭合指令），`max_output_tokens=8000` 防长尾
+- 实测同需求 3 次生成 10.2/10.4/10.5s（基线 48–58s，**提速约 80%**），JSON 完整无截断，节点数与 V2 产出一致
+
+### 2. 节点 AI 智能填充（Phase 18）
+- 新增 `POST /api/ai/enrich-node`：输入地点名（+可选城市），AI 返回类型/建议时长/亮点/简介/开放时间/门票/预估费用
+- 新增/编辑节点表单「AI 填充」按钮一键回填 7 字段（可继续修改），生僻名容错降级（仅返回 OTHER）
+- 实测「宽窄巷子」2.2s 全字段返回，免费景点预估费用正确为 0
+
+### 3. 多方式路线推荐（Phase 19）
+- 百度 direction v2 四端点分发（驾车/公交/步行/骑行），公交多方案取耗时最短
+- 距离分档策略：≤1km 步行 / 1–5km 公交优先（失败降级驾车）+ 打车估价 / 5–30km 公交驾车取优 / >30km 驾车
+- 打车本地估价（base 14 元 + 超 3km × 2.3 元/km，按驾车距离估算，避免公交绕行偏高约 30%）
+- `plan_route` 新增 `suggestion` 出行建议文案列（迁移脚本 `V4__add_route_suggestion.sql`），路线列表与地图信息窗展示（如「建议公交/地铁约 25 分钟；打车约 18 元，仅供参考」）
+- 实测四档全符合预期，5 节点行程重算仅 1.7s
+
+### 4. 前端体验优化（Phase 20）
+- 拖拽升级为**整卡拖拽**（listeners 上卡根，8px 阈值下点击与拖拽共存），拖拽中 grabbing 阴影，原手柄缩为视觉提示
+- 单天模式节点卡与路线卡**交错布局**（新组件 RouteCard 竖向连接线：NodeCard→RouteCard→NodeCard），「全部」Tab 保持按天分组
+- 生成页视觉：渐变 hero + 进场动画、卡片 hover 浮起、按钮渐变；AI 遮罩新增顶部流动进度条
+- 375px 窄屏回归无横向溢出，移动端 Drawer 自动继承新布局
+
+### 5. 注册体验优化（2026-10-14）
+- 修复 `/api/auth/register` 只返用户信息（无 token）导致前端自动登录失效、被路由守卫弹回登录页的问题——**注册成功即自动登录直达行程列表**
+- 注册表单新增**确认密码**（两次输入不一致即时提示）
+- 邮箱改为可选（与前端表单标注一致），空串归一化为 null，非法格式仍 400 拒绝
+
+---
+
 ## 数据库版本
 
 | 版本 | 脚本 | 内容 |
@@ -109,8 +143,9 @@
 | 初始 | `db/schema.sql` | 5 张核心表（travel_plan / plan_day / plan_node / plan_route / ai_generation） |
 | V2 | `db/migration/V2__add_user_and_isolation.sql` | `user` 表；`travel_plan` 增加 `user_id`/`is_public`；`ai_generation` 增加 `user_id`；存量行程标记公共 |
 | V3 | `db/migration/V3__create_image_import.sql` | `image_import` 表（识图记录全流程） |
+| V4 | `db/migration/V4__add_route_suggestion.sql` | `plan_route` 增加 `suggestion` 出行建议文案列 |
 
-**V1 → V2 升级提示**：需依次执行 V2、V3 迁移脚本，并配置 `jwt.secret`、`jwt.expiration` 与识图模型相关配置项。
+**V1 → V3 升级提示**：需依次执行 V2、V3、V4 迁移脚本，并配置 `jwt.secret`、`jwt.expiration`、识图模型相关配置项与 `app.route.taxi.*` 打车估价参数（缺省有默认值）。
 
 ## 已知限制
 
