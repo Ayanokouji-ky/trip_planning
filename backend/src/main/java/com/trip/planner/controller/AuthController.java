@@ -25,9 +25,14 @@ public class AuthController {
 
     private final UserService userService;
 
+    /** 注册成功即自动登录，直接返回 token + 用户信息，前端免二次登录 */
     @PostMapping("/register")
-    public ApiResult<UserResponse> register(@Validated @RequestBody RegisterRequest request) {
-        return ApiResult.ok(userService.register(request));
+    public ApiResult<LoginResponse> register(@Validated @RequestBody RegisterRequest request) {
+        userService.register(request);
+        LoginRequest loginRequest = new LoginRequest();
+        loginRequest.setUsername(request.getUsername());
+        loginRequest.setPassword(request.getPassword());
+        return ApiResult.ok(userService.login(loginRequest));
     }
 
     @PostMapping("/login")

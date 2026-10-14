@@ -39,11 +39,12 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(400, "用户名已存在");
         }
 
-        // 2. 构造用户实体（默认 USER 角色）
+        // 2. 构造用户实体（默认 USER 角色；邮箱可选，空串归一化为 null）
         User user = new User();
         user.setUsername(request.getUsername());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setEmail(request.getEmail());
+        String email = request.getEmail();
+        user.setEmail(email != null && !email.trim().isEmpty() ? email.trim() : null);
         user.setRole("USER");
         userMapper.insert(user);
         log.info("User registered: id={}, username={}", user.getId(), user.getUsername());

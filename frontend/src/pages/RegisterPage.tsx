@@ -14,10 +14,11 @@ export default function RegisterPage() {
   const login = useAuthStore((s) => s.login);
   const [submitting, setSubmitting] = useState(false);
 
-  const onFinish = async (values: RegisterRequest) => {
+  const onFinish = async (values: RegisterRequest & { confirmPassword?: string }) => {
     setSubmitting(true);
     try {
-      const { token, user } = await authApi.register(values);
+      const { confirmPassword: _confirm, ...payload } = values;
+      const { token, user } = await authApi.register(payload);
       login(token, user);
       message.success(`注册成功，欢迎 ${user.username}`);
       navigate('/plans', { replace: true });
@@ -74,6 +75,24 @@ export default function RegisterPage() {
             ]}
           >
             <Input.Password prefix={<LockOutlined />} placeholder="密码" />
+          </Form.Item>
+          <Form.Item
+            label="确认密码"
+            name="confirmPassword"
+            dependencies={['password']}
+            rules={[
+              { required: true, message: '请再次输入密码' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('password') === value) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(new Error('两次输入的密码不一致'));
+                },
+              }),
+            ]}
+          >
+            <Input.Password prefix={<LockOutlined />} placeholder="再次输入密码" />
           </Form.Item>
           <Form.Item
             label="邮箱"
